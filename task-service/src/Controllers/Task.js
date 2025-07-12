@@ -54,11 +54,22 @@ const updateTask = async (req, res) => {
     }
 };
 
+const getTaskCount = async (req, res) => {
+
+    try {
+        const result = await TaskService.getTaskCount();
+        res.status(200).json(result);
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Error fetching task count", error: error.message });
+    }
+};
+
 module.exports = {
     createTask,
     getSingleTask,
     getAllTasks,
     deleteTask,
     getAllProjectTasks,
-    updateTask
+    updateTask,
+    getTaskCount
 };

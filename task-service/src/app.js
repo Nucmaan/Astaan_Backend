@@ -4,6 +4,9 @@ const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const   rateLimit  = require('express-rate-limit');
 
+const compression = require('compression');
+const helmet = require('helmet');
+
 const app = express();
 
  app.use(express.json({ limit: "2gb" }));
@@ -45,6 +48,9 @@ app.use(cookieParser());
  app.use(express.urlencoded({ limit: "5gb", extended: true }));
 
 app.use("/public", express.static("public"));
+
+app.use(compression());
+app.use(helmet());
 
 const taskRoutes = require("./Routes/Task.js");
 const taskAssignment = require("./Routes/Task_Assignments.js");

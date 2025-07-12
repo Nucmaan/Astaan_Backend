@@ -121,6 +121,16 @@ const logoutUser = async (req, res) => {
   }
 };
 
+// Dashboard controller
+const getDashboardData = async (req, res) => {
+  try {
+    const data = await UserService.DashboardData();
+    res.status(200).json({ success: true, dashboard: data });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 module.exports = {
   registerUser,
   loginUser,
@@ -131,4 +141,5 @@ module.exports = {
   forgetPassword,
   resetPassword,
   logoutUser,
+  getDashboardData,
 };

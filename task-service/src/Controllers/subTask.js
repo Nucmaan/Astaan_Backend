@@ -65,11 +65,21 @@ getSubTasksByTaskId  = async (req, res) => {
     }
 };
 
+const countAllSubTasks = async (req, res) => {
+  try {
+    const result = await subTaskService.countAllSubTasks();
+    res.status(200).json(result);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   createSubTask,
   getAllSubTasks,
   getSubTaskById,
   updateSubTask,
   deleteSubTask,
-  getSubTasksByTaskId
+  getSubTasksByTaskId,
+  countAllSubTasks
 };

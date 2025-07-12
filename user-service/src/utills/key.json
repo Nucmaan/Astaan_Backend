@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "project-management-462217",
+  "private_key_id": "6a4bef679742eb29c4c218031711e2e20e812ca6",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDJx/w5d+ivswmZ\nMu+PjPY0mddADOcVPrykYhmDNMs//dZxd1BzrrrUS3M1rAsCX+KqjUT+5aNizQAq\nCPBViCnFeZhcuCIkfOFfEiQuS6uDkejwIsdjSVYmxf8g+8/NWWYNz908G5u1s0oU\nMH98M9XHv/mQ/5OIUlGq/OXrg02G2Dyya9Z+M63EQCaAOxkABduK3r335p1+aWvr\ng9ijY7FfnGPbxap02mWX1IaCrDd8LKb3x4+HikEPuNfnDgRwsDB2I2Vg8wrj3eRV\nhLQUsPhwDkmyV+V31/QJnOvmxQNroHkVAFlFyr6jnWQQrv/P0c7xplxkYjCgtoDO\nD3umNkpjAgMBAAECggEAYBjFlurz3qViF1tqOs/zu2Ze3GqorPYFajYsF1AP0iiG\nNeCQaJ+Y650JP9DxJ07aCMahytE7qESgZOR/7QQdfKYluVaaMA1nWdsubvvrsYvO\nR3sQwUi+ZlXaZO937kC6uS47GzK8y+KYj5fvRwv6rphPd044iW5G5atupmSQifxe\nGDGMbC4loWV7TmwU/q6Ujv6lwfEdDdZ/kPSVTfe8EPspBdelcJ+zSU6Q9T13Omck\nTgmi5/suKpxRZu1vNxUPl8K/zdBgOA+ZsySdKBpZleEEPHCvyILNhW0A+x+2dW21\ng875ELY9TsleY1AEiZaOeZhBLzg0J99WpnuUQa+NKQKBgQDoBMhNwDEVM9cDdB/h\nxJ5BViVCGRH5G9EiZ9tTN0XSXH7PfZQn6Z+zOUyIJAKJpQnONvEZpmpHB4f3E9lK\nb9gKmoNyGR9hDPi4MZNHv0+FvidlkmktyXX2UOO3Mt1ZfrQTzkx0+T+6FzDb73CW\nwik+g22kqBymhqDgKTg0vs60OwKBgQDeox5RluKyBvV6NCItCOAA0VmqMOsZepG2\nxmCIhKlB5zbXjjLtNLdoCaHn8EiacpRSNFgoHk2/UJln3uQl3nmpjFtbB0qKVe5O\ns7tJbXyRFgDwp1/eKOSPZbSlcZj3zrKBcB6MhL/jbJLgCuoRwN2PwsZxlk8iAiNz\ntL89Hdwn+QKBgEl16i2j4maCKVuwkr+azziEm/tXkLc8tXSdSXYJlBPMsWHkstoI\nQEYwqCiarisClB40ixXB+PhQTB5QrIXC77Y7wc6IYcUKpF09ZRJcYkNIN5UTTDXx\nCWZZqh/A/RBu63kx4kdO+3xiB1g7cXxqMUDXwAlYKOoYyirvIhqhJzUtAoGBAKQL\nKs7RT43/hKabfUcTkAHqP5ggXUozvuQevYg5v4EYvZcMZsfTHQSifFKrAMQUgucj\nPIWq9nxuBeq8F/0zNQ/RpIqpD6pocKQ62FfdPXil7uFjYkcOeIKUXQu+bQjCm1K2\nazv8oGsRWBOO1zNnmZlQ2eld6EbVrouV9Ycx1kL5AoGBAK8oOWNEBlrc/GxUrvrx\neLQwTE6cX9UmZLBeumZTN1WoVoG74cdZfP4zbTH+9yGNhxbjesLYXufQGcqDVWNY\nq4NR/PaAiBCOxdhn+l6UYvKKHwPcV6YHvWTLx0KrjV0zqSY9jqwR3xQ3eUZrOBjl\ndMPVb+4OsPWU/TQg9RNQpFB2\n-----END PRIVATE KEY-----\n",
+  "client_email": "ems-service-account@project-management-462217.iam.gserviceaccount.com",
+  "client_id": "105909481480748983255",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/ems-service-account%40project-management-462217.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}

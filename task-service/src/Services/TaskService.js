@@ -1,312 +1,217 @@
-
 const Task = require("../Model/TasksModel.js");
 const axios = require("axios");
-const { uploadFileToS3, deleteFileFromS3 } = require("../utills/s3SetUp.js");
+const redis = require("../utills/redisClient.js");
+const { uploadFileToGCS, deleteFileFromGCS } = require("../utills/gcpSetup.js");
 
 const projectServiceUrl = process.env.PROJECT_SERVICE_URL;
- 
+
+const TASK_COUNT_KEY = "tasks:count";
+const TASK_CACHE_TTL = 60 * 60 * 24; // 24 hours
+
 const checkProjectExists = async (project_id) => {
-    try {
-         if (!project_id || project_id === 'undefined' || isNaN(parseInt(project_id))) {
-            return { success: false, message: "Invalid project ID provided" };
-        }
+  if (!project_id || project_id === "undefined" || isNaN(parseInt(project_id))) {
+    return { success: false, message: "Invalid project ID provided" };
+  }
 
-        const response = await axios.get(`${projectServiceUrl}/api/project/singleProject/${project_id}`);
-
-         if (response.data && response.data.success && response.data.project) {
-            const project = response.data.project;
-
-            return {
-                success: true,
-                project: {
-                    id: project.id,
-                    name: project.name,
-                    description: project.description,
-                    deadline: project.deadline,
-                    status: project.status,
-                    priority: project.priority,
-                    progress: project.progress,
-                    project_image: project.project_image,
-                    project_type: project.project_type,
-                    created_at: project.created_at,
-                    updated_at: project.updated_at,
-                    creator: {
-                        id: project.creator_id,
-                        name: project.creator_name,
-                        email: project.creator_email,
-                        role: project.creator_role,
-                        profile_image: project.creator_profile_image
-                    }
-                }
-            };
-        }
-
-        return { success: false, message: "Project not found" };
-    } catch (error) {
-        console.error("Error fetching project details:", error.message);
-        return { success: false, message: "project id not found", error: error.message };
+  try {
+    const response = await axios.get(`${projectServiceUrl}/api/project/singleProject/${project_id}`);
+    if (response?.data?.success && response.data.project) {
+      return { success: true, project: response.data.project };
     }
+    return { success: false, message: "Project not found" };
+  } catch (err) {
+    return { success: false, message: "Project not found", error: err.message };
+  }
 };
 
-const createTask = async (taskData, file) => {
-    try {
-        const { title, description, project_id, status, priority, deadline, estimated_hours } = taskData;
-
-        if (!title || !project_id) {
-            return { success: false, message: "Title and Project ID are required." };
-        }
-
-        if (estimated_hours && estimated_hours <= 0) {
-            return { success: false, message: "Estimated hours must be greater than 0." };
-        }
-
-        const projectCheck = await checkProjectExists(project_id);
-        if (!projectCheck.success) {
-            return { success: false, message: projectCheck.message };
-        }
-
-         let file_url = null;
-        if (file) {
-            try {
-                file_url = await uploadFileToS3(file);
-            } catch (error) {
-                console.error("Error uploading file to S3:", error.message);
-                return { success: false, message: "Failed to upload file", error: error.message };
-            }
-        }
-
-        const newTask = await Task.create({
-            title,
-            description,
-            project_id,
-            status: status || "To Do",
-            priority: priority || "Medium",
-            deadline,
-            estimated_hours,
-            file_url,
-        });
-
-        return { success: true, message: "Task created successfully", task: newTask };
-    } catch (error) {
-        console.error("Error creating task:", error.message);
-        return { success: false, message: "Error creating task", error: error.message };
-    }
+// 🧹 Clear task cache
+const clearTaskCache = async () => {
+  const keys = await redis.keys("tasks:*");
+  if (keys.length > 0) await redis.del(...keys);
 };
 
+// 🔄 Refresh cron (for dashboard or analytics)
+const refreshTaskCache = async () => {
+  const count = await Task.count();
+  await redis.set(TASK_COUNT_KEY, count, "EX", TASK_CACHE_TTL);
+};
+
+// 🆕 Create
+const createTask = async (data, file) => {
+  const { title, description, project_id, status, priority, deadline, estimated_hours } = data;
+
+  if (!title || !project_id) return { success: false, message: "Title and Project ID are required" };
+  if (estimated_hours && estimated_hours <= 0)
+    return { success: false, message: "Estimated hours must be greater than 0" };
+
+  const projectCheck = await checkProjectExists(project_id);
+  if (!projectCheck.success) return { success: false, message: projectCheck.message };
+
+  let file_url = "";
+  if (file) file_url = await uploadFileToGCS(file);
+
+  const newTask = await Task.create({
+    title,
+    description,
+    project_id,
+    status: status || "To Do",
+    priority: priority || "Medium",
+    deadline,
+    estimated_hours,
+    file_url,
+  });
+
+  await redis.del(TASK_COUNT_KEY);
+  await redis.del("tasks:all");
+  await redis.del(`tasks:project:${project_id}`);
+
+  return { success: true, message: "Task created successfully", task: newTask };
+};
+
+// 🔍 Single Task
 const getSingleTask = async (id) => {
-    try {
-        if (!id) {
-            return { success: false, message: "Invalid task ID" };
-        }
+  const key = `task:${id}`;
+  const cached = await redis.get(key);
+  if (cached) return JSON.parse(cached);
 
-        const task = await Task.findOne({
-            where: { id },
-            attributes: ['id', 'title', 'description', 'status', 'project_id', 'priority', 'deadline', 'estimated_hours', 'file_url', 'completed_at']
-        });
+  const task = await Task.findByPk(id);
+  if (!task) return { success: false, message: "Task not found" };
 
-        if (!task) {
-            return { success: false, message: "Task not found" };
-        }
- 
-        const projectCheck = await checkProjectExists(task.project_id);
+  const projectCheck = await checkProjectExists(task.project_id);
+  const result = {
+    success: true,
+    task: {
+      ...task.get(),
+      project: projectCheck.success ? projectCheck.project : null,
+    },
+  };
 
-        if (projectCheck.success) {
-            return { 
-                success: true,
-                task: {
-                    ...task.get(),  
-                    project: projectCheck.project
-                }
-            };
-        }
-        return {
-            success: true,
-            task: {
-                ...task.get(),
-                project: null,
-                error: "Project not found"
-            }
-        };
-    } catch (error) {
-        console.error("Error fetching task:", error.message);
-        return { success: false, message: "Error fetching task", error: error.message };
-    }
+  await redis.set(key, JSON.stringify(result), "EX", TASK_CACHE_TTL);
+  return result;
 };
 
+// 📋 All Tasks
 const getAllTasks = async () => {
-    try {
+  const key = "tasks:all";
+  const cached = await redis.get(key);
+  if (cached) return JSON.parse(cached);
 
-        const tasks = await Task.findAll({
-            attributes: ['id', 'title', 'description', 'status', 'project_id', 'priority', 'deadline', 'estimated_hours', 'file_url', 'completed_at'], 
-        });
+  const tasks = await Task.findAll();
 
-        const tasksWithProjectDetails = await Promise.all(
-            tasks.map(async (task) => {
-                const projectCheck = await checkProjectExists(task.project_id); 
+  const withProject = await Promise.all(
+    tasks.map(async (t) => {
+      const p = await checkProjectExists(t.project_id);
+      return {
+        ...t.get(),
+        project: p.success ? p.project : null,
+      };
+    })
+  );
 
-                if (projectCheck.success) {
-                    return {
-                        ...task.get(), 
-                        project: projectCheck.project,
-                    };
-                }
-
-                return {
-                    ...task.get(),
-                    project: null,
-                    error: "Project not found",
-                };
-            })
-        );
-
-        return { success: true, tasks: tasksWithProjectDetails };
-    } catch (error) {
-        console.error("Error fetching tasks:", error.message);
-        throw new Error(error.message);
-    }
+  const result = { success: true, tasks: withProject };
+  await redis.set(key, JSON.stringify(result), "EX", TASK_CACHE_TTL);
+  return result;
 };
 
+// 🧮 Count
+const getTaskCount = async () => {
+  const cached = await redis.get(TASK_COUNT_KEY);
+  if (cached !== null) return parseInt(cached, 10);
+
+  const count = await Task.count();
+  await redis.set(TASK_COUNT_KEY, count, "EX", TASK_CACHE_TTL);
+  return count;
+};
+
+// 🗑️ Delete
 const deleteTask = async (id) => {
+  const task = await Task.findByPk(id);
+  if (!task) return { success: false, message: "Task not found" };
+
+  if (task.file_url) {
     try {
-        if (!id) {
-            return { success: false, message: "Invalid task ID" };
-        }
-
-        const task = await Task.findByPk(id);
-
-        if (!task) {
-            return { success: false, message: "Task not found" };
-        }
-
-         if (task.file_url) {
-            try {
-                await deleteFileFromS3(task.file_url);
-            } catch (error) {
-                console.error("Error deleting file from S3:", error.message);
-            }
-        }
-
-        await task.destroy();
-
-        return { success: true, message: "Task deleted successfully" };
-    } catch (error) {
-        console.error("Error deleting task:", error.message);
-        return { success: false, message: "Error deleting task", error: error.message };
+      await deleteFileFromGCS(task.file_url);
+    } catch (e) {
+      console.warn("Failed to delete file:", e.message);
     }
+  }
+
+  await task.destroy();
+
+  await redis.del(`task:${id}`);
+  await redis.del("tasks:all");
+  await redis.del(`tasks:project:${task.project_id}`);
+  await redis.del(TASK_COUNT_KEY);
+
+  return { success: true, message: "Task deleted" };
 };
 
+// ✏️ Update
+const updateTask = async (id, data, file) => {
+  const task = await Task.findByPk(id);
+  if (!task) return { success: false, message: "Task not found" };
+
+  const { project_id: newProjectId } = data;
+
+  if (newProjectId && newProjectId !== task.project_id) {
+    const check = await checkProjectExists(newProjectId);
+    if (!check.success) return { success: false, message: check.message };
+  }
+
+  let file_url = task.file_url;
+  if (file) {
+    file_url = await uploadFileToGCS(file);
+    if (task.file_url) {
+      try {
+        await deleteFileFromGCS(task.file_url);
+      } catch (err) {
+        console.warn("Old file cleanup failed:", err.message);
+      }
+    }
+  }
+
+  await task.update({
+    ...data,
+    file_url,
+  });
+
+  await redis.del(`task:${id}`);
+  await redis.del("tasks:all");
+  await redis.del(`tasks:project:${task.project_id}`);
+  if (newProjectId && newProjectId !== task.project_id) {
+    await redis.del(`tasks:project:${newProjectId}`);
+  }
+
+  return { success: true, message: "Task updated", task };
+};
+
+// 📦 Project Tasks
 const getAllProjectTasks = async (project_id) => {
-    try {
-        if (!project_id) {
-            return { success: false, message: "Invalid project ID" };
-        }
+  const key = `tasks:project:${project_id}`;
+  const cached = await redis.get(key);
+  if (cached) return JSON.parse(cached);
 
-         const projectCheck = await checkProjectExists(project_id);
+  const check = await checkProjectExists(project_id);
+  if (!check.success) return { success: false, message: check.message };
 
-        if (!projectCheck.success) {
-            return { success: false, message: "Project not found" };
-        }
+  const tasks = await Task.findAll({ where: { project_id } });
+  const result = {
+    success: true,
+    project: check.project,
+    tasks,
+  };
 
-         const tasks = await Task.findAll({
-            where: { project_id }, 
-            attributes: [
-                "id",
-                "title",
-                "description",
-                "status",
-                "priority",
-                "deadline",
-                "estimated_hours",
-                "file_url",
-                "completed_at",
-            ],
-        });
-
-        if (tasks.length === 0) {
-            return { success: false, message: "No tasks found for this project" };
-        }
-
-         return { success: true, project: projectCheck.project, tasks };
-    } catch (error) {
-        console.error("Error fetching project tasks:", error.message);
-        return { success: false, message: "Error fetching project tasks", error: error.message };
-    }
-};
-
-const updateTask = async (id, taskData, file) => {
-    try {
-        const { title, description, project_id, status, priority, deadline, estimated_hours, completed_at } = taskData;
-       
-        const currentTask = await Task.findOne({
-            where: { id },
-            attributes: ['file_url', 'project_id']
-        });
-
-        if (!currentTask) {
-            return { success: false, message: "Task not found" };
-        }
-
-        if (project_id && project_id !== currentTask.project_id) {
-            const projectResponse = await checkProjectExists(project_id);
-            if (!projectResponse.success) {
-                return { success: false, message: "Invalid project ID. Project does not exist." };
-            }
-        }
-
-         let file_url = null;
-        if (file) {
-            try {
-                 file_url = await uploadFileToS3(file);
-                
-                 if (currentTask.file_url) {
-                    try {
-                        await deleteFileFromS3(currentTask.file_url);
-                    } catch (error) {
-                        console.error("Error deleting old file from S3:", error.message);
-                     }
-                }
-            } catch (error) {
-                console.error("Error uploading new file to S3:", error.message);
-                return { success: false, message: "Failed to upload file", error: error.message };
-            }
-        }
-
-        const updatedData = {};
-
-        if (title) updatedData.title = title;
-        if (description) updatedData.description = description;
-        if (project_id) updatedData.project_id = project_id;
-        if (status) updatedData.status = status;
-        if (priority) updatedData.priority = priority;
-        if (deadline) updatedData.deadline = deadline;
-        if (estimated_hours) updatedData.estimated_hours = estimated_hours;
-        if (completed_at) updatedData.completed_at = completed_at;
-        if (file_url) updatedData.file_url = file_url;
-
-        if (Object.keys(updatedData).length === 0) {
-            return { success: false, message: "No fields provided for update" };
-        }
-
-        await Task.update(updatedData, { where: { id } });
-
-        const updatedTask = await Task.findOne({ where: { id } });
-
-        return {
-            success: true,
-            message: "Task updated successfully",
-            task: updatedTask
-        };
-    } catch (error) {
-        console.error("Error updating task:", error.message);
-        return { success: false, message: "Error updating task", error: error.message };
-    }
+  await redis.set(key, JSON.stringify(result), "EX", TASK_CACHE_TTL);
+  return result;
 };
 
 module.exports = {
-    createTask,
-    getSingleTask,
-    getAllTasks,
-    deleteTask,
-    getAllProjectTasks,
-    updateTask
+  createTask,
+  getSingleTask,
+  getAllTasks,
+  getTaskCount,
+  deleteTask,
+  updateTask,
+  getAllProjectTasks,
+  refreshTaskCache,
 };

@@ -1,4 +1,4 @@
-const { registerUser, getUsers, loginUser, forgetPassword, resetPassword, getSingleUser, deleteUser, logoutUser, updateUser } = require('../Controllers/User');
+const { registerUser, getUsers, loginUser, forgetPassword, resetPassword, getSingleUser, deleteUser, logoutUser, updateUser, getDashboardData } = require('../Controllers/User');
 const { authMiddleware } = require('../middleware/authMiddleware.js');
 
 const Router = require('express').Router();
@@ -14,6 +14,7 @@ Router.delete("/users/:id",deleteUser);
 Router.put("/users/:id",upload.single('profileImage'),updateUser);
 Router.post("/forgot-password", forgetPassword);
 Router.post("/reset-password", resetPassword);
+Router.get("/dashboard", getDashboardData);
 
 module.exports = Router
 

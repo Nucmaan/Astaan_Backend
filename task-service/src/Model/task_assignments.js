@@ -1,6 +1,6 @@
 const { DataTypes } = require("sequelize");
-const sequelize = require("../Database/index.js");
-const Task = require("./subTask.js");  
+const { sequelize } = require("../Database/index.js");
+const SubTask = require("./subTask.js");  
 
 const TaskAssignment = sequelize.define("TaskAssignment", {
   id: {
@@ -12,7 +12,7 @@ const TaskAssignment = sequelize.define("TaskAssignment", {
     type: DataTypes.INTEGER,
     allowNull: false,
     references: {
-      model: Task,  
+      model: SubTask,  
       key: 'id',
     },
     onDelete: 'CASCADE', 
@@ -27,6 +27,5 @@ const TaskAssignment = sequelize.define("TaskAssignment", {
   },
 });
 
-Task.hasMany(TaskAssignment, { foreignKey: 'task_id' });
-
+ 
 module.exports = TaskAssignment;

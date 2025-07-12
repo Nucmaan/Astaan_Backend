@@ -1,22 +1,18 @@
-require("dotenv").config();
+const cluster = require("cluster");
+const os = require("os");
 
-const app = require("./app.js");
-const sequelize = require("./Database/index.js");  
+if (cluster.isMaster) {
+  const numCPUs = os.cpus().length;
+  console.log(`Master ${process.pid} is running. Starting ${numCPUs} workers...`);
 
-const PORT = process.env.PORT;
+  for (let i = 0; i < numCPUs; i++) {
+    cluster.fork();
+  }
 
-sequelize.authenticate()
-  .then(() => {
-    console.log("Database connection successful!");
-
-     app.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
-    });
-  })
-  .catch((error) => {
-    console.error("Unable to connect to the database:", error);
+  cluster.on("exit", (worker) => {
+    console.log(`Worker ${worker.process.pid} died. Spawning a new one...`);
+    cluster.fork();
   });
-
-app.get('/', (req, res) => {
-  res.send('Project Service is running!');
-});
+} else {
+  require("./server.js");   
+}

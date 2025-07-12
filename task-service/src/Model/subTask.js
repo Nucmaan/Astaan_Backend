@@ -1,5 +1,5 @@
 const { DataTypes } = require("sequelize");
-const sequelize = require("../Database/index.js");
+const { sequelize }= require("../Database/index.js");
 const Task = require("./TasksModel.js");
 
 const SubTask = sequelize.define(
@@ -67,7 +67,5 @@ const SubTask = sequelize.define(
   }
 );
 
-Task.hasMany(SubTask, { foreignKey: "task_id", onDelete: "CASCADE" });
-SubTask.belongsTo(Task, { foreignKey: "task_id" });
 
 module.exports = SubTask;

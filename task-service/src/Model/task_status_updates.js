@@ -1,5 +1,5 @@
 const { DataTypes, Op } = require("sequelize");
-const sequelize = require("../Database/index.js");
+const { sequelize } = require("../Database/index.js");
 const Task = require("./subTask.js");
 
 const TaskStatusUpdate = sequelize.define("TaskStatusUpdate", {
@@ -43,9 +43,6 @@ const TaskStatusUpdate = sequelize.define("TaskStatusUpdate", {
 }, {
   timestamps: true, 
 });
-
-
-TaskStatusUpdate.belongsTo(Task, { foreignKey: "task_id", onDelete: "CASCADE" });
-Task.hasMany(TaskStatusUpdate, { foreignKey: "task_id" });
+ 
 
 module.exports = TaskStatusUpdate;

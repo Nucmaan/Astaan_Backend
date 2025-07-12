@@ -55,10 +55,43 @@ const updateProject = async (req, res) => {
     }
 };
 
+const getDashboardData = async (req, res) => {
+    try {
+        const data = await ProjectService.DashboardData();
+        res.status(200).json({ success: true, dashboard: data });
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Error fetching dashboard data", error: error.message });
+    }
+};
+
+const getProjectsByType = async (req, res) => {
+    try {
+        const { project_type } = req.params;
+        const page = parseInt(req.query.page, 10) || 1;
+        const pageSize = parseInt(req.query.pageSize, 10) || 15;
+        const result = await ProjectService.getProjectsByType(project_type, page, pageSize);
+        res.status(200).json({ success: true, ...result });
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Error fetching projects by type", error: error.message });
+    }
+};
+
+const getAllProjectDetails = async (req, res) => {
+    try {
+        const details = await ProjectService.allProjectDetails();
+        res.status(200).json({ success: true, details });
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Error fetching project details", error: error.message });
+    }
+};
+
 module.exports = {
     createProject,
     getAllProjects,
     getSingleProject,
     deleteProject,
-    updateProject
+    updateProject,
+    getDashboardData,
+    getProjectsByType,
+    getAllProjectDetails
 };

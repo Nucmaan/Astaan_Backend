@@ -1,278 +1,223 @@
+// src/Services/ProjectService.js
 const Project = require("../Model/Project.js");
-const axios = require("axios");
-const { Op } = require('sequelize');
-const { uploadFileToS3, deleteFileFromS3 } = require("../utills/s3SetUp.js");
+const axios   = require("axios");
+const { uploadFileToGCS, deleteFileFromGCS } = require("../utills/gcpSetup.js");
+const redis   = require("../utills/redisClient.js");
 
 const userServiceUrl = process.env.USER_SERVICE_URL;
- 
+const CACHE_TTL      = 60 * 60 * 24;         // 24 h
+const PAGE_SIZE_DEF  = 15;
+const TYPE_LIST      = ["unknown","Movie","DRAMA","Documentary","Action","Islamic","Cartoon"];
+const STATUS_LIST    = ["Pending","In Progress","Completed","Planning","On Hold"];
+const PRIORITY_LIST  = ["High","Medium","Low"];
+
+/* ─────────────────────  helpers ───────────────────── */
+
 const getUserFromService = async (userId) => {
+  const key = `user:external:${userId}`;
+  const cached = await redis.get(key);
+  if (cached) return JSON.parse(cached);
+
   try {
-    const response = await axios.get(
-      `${userServiceUrl}/api/auth/users/${userId}`
-    );
-    return response.data.user; 
-  } catch (error) {
-    console.error("Error fetching user:", error.message);
+    const { data } = await axios.get(`${userServiceUrl}/api/auth/users/${userId}`, { timeout: 3000 });
+    if (data?.user) await redis.set(key, JSON.stringify(data.user), "EX", CACHE_TTL);
+    return data.user ?? null;
+  } catch (e) {
+    console.error("User‑service fetch error:", e.message);
     return null;
   }
 };
 
-const createProject = async (data, file) => {
+/* ─────────────────────  DB fetchers (no cache) ───────────────────── */
+
+const dbAllProjects = async () => {
+  const rows = await Project.findAll({
+    attributes: ["id","name","description","deadline","status","priority","progress","project_image",
+                 "project_type","channel","created_at","updated_at","created_by"]
+  });
+
+  return Promise.all(rows.map(async (p) => {
+    const u = await getUserFromService(p.created_by);
+    return { ...p.toJSON(),
+      creator_id            : u?.id   ?? null,
+      creator_name          : u?.name ?? "Unknown",
+      creator_email         : u?.email?? "Unknown",
+      creator_role          : u?.role ?? "Unknown",
+      creator_profile_image : u?.profile_image ?? null
+    };
+  }));
+};
+
+const dbSingleProject = async (id) => {
+  const proj = await Project.findByPk(id);
+  if (!proj) throw new Error("Project not found");
+  const u = await getUserFromService(proj.created_by);
+  return { ...proj.toJSON(),
+    creator_id            : u?.id   ?? null,
+    creator_name          : u?.name ?? "Unknown",
+    creator_email         : u?.email?? "Unknown",
+    creator_role          : u?.role ?? "Unknown",
+    creator_profile_image : u?.profile_image ?? null
+  };
+};
+
+const dbProjectsByType = async (type, page, size) => {
+  const offset = (page - 1) * size;
+  const { rows, count } = await Project.findAndCountAll({
+    where: { project_type: type },
+    offset,
+    limit : size,
+    attributes: ["id","name","description","deadline","status","priority",
+                 "progress","project_image","project_type","channel",
+                 "created_at","updated_at","created_by"]
+  });
+  return { projects: rows, total: count, page, pageSize: size, totalPages: Math.ceil(count/size) };
+};
+
+const dbProjectDetails = async () => {
+  const res = {};
+  for (const t of TYPE_LIST) {
+    res[t] = {};
+    for (const s of STATUS_LIST) {
+      res[t][s] = await Project.count({ where:{ project_type:t, status:s } });
+    }
+  }
+  return res;
+};
+
+/* ─────────────────────  cache getters (fallback) ───────────────────── */
+
+const cachedOrBuild = async (key, builder) => {
+  const c = await redis.get(key);
+  if (c) return JSON.parse(c);
+  const fresh = await builder();
+  await redis.set(key, JSON.stringify(fresh), "EX", CACHE_TTL);
+  return fresh;
+};
+
+const getAllProjects      = () => cachedOrBuild("projects:all", dbAllProjects);
+const getSingleProject    = (id) => cachedOrBuild(`project:${id}`, () => dbSingleProject(id));
+const getProjectsByType   = (t,p=1,s=PAGE_SIZE_DEF) =>
+  cachedOrBuild(`projects:type:${t}:page:${p}:size:${s}`, () => dbProjectsByType(t,p,s));
+const allProjectDetails   = () => cachedOrBuild("projects:details", dbProjectDetails);
+const getProjectCountWithCache = () => cachedOrBuild("projects:count", () => Project.count());
+
+const DashboardData = async () => ({ totalProjects: await getProjectCountWithCache() });
+
+/* ─────────────────────  mutations + cache clear ───────────────────── */
+
+const clearProjectCache = async () => {
+  await redis.del("projects:all","projects:count","projects:details");
+  const keys = [];
+  for (const t of TYPE_LIST) keys.push(`projects:type:${t}:page:1:size:${PAGE_SIZE_DEF}`);
+  const projKeys = await redis.keys("project:*"); // clear individual project caches
+  await redis.del(...keys, ...projKeys);
+};
+
+const createProject = async (body, file) => {
+  const { name, description, deadline, created_by,
+          status, priority, progress, project_type, channel } = body;
+
+  if (!name || !description || !deadline || !created_by)
+    throw new Error("Required fields missing");
+  if (isNaN(created_by)) throw new Error("created_by must be numeric");
+  const d = new Date(deadline); if (isNaN(d)) throw new Error("Invalid deadline");
+  if (status   && !STATUS_LIST.includes(status))     throw new Error("Invalid status");
+  if (priority && !PRIORITY_LIST.includes(priority)) throw new Error("Invalid priority");
+  const prog = progress===undefined ? 0 : Number(progress);
+  if (isNaN(prog) || prog<0 || prog>100) throw new Error("Invalid progress");
+
+  if (!await getUserFromService(created_by)) throw new Error("User not found");
+
+  const img = file ? await uploadFileToGCS(file) : null;
+
+  const project = await Project.create({
+    name, description, deadline:d, created_by,
+    status: status||"Pending", priority: priority||"Medium",
+    progress: prog, project_type: project_type||"unknown",
+    channel: channel||null, project_image: img
+  });
+  await clearProjectCache();
+  refreshProjectCache();  // async refresh (no await) to rebuild quickly
+  return project;
+};
+
+const updateProject = async (id, body, file) => {
+  const proj = await Project.findByPk(id);
+  if (!proj) throw new Error("Project not found");
+
+  let img = proj.project_image;
+  if (file) {
+    if (img) await deleteFileFromGCS(img);
+    img = await uploadFileToGCS(file);
+  }
+
+  await Project.update({
+    name        : body.name        ?? proj.name,
+    description : body.description ?? proj.description,
+    deadline    : body.deadline    ?? proj.deadline,
+    status      : body.status      ?? proj.status,
+    priority    : body.priority    ?? proj.priority,
+    progress    : body.progress    ?? proj.progress,
+    project_type: body.project_type?? proj.project_type,
+    project_image: img
+  },{ where:{ id }});
+
+  await clearProjectCache();
+  refreshProjectCache();
+  return Project.findByPk(id);
+};
+
+const deleteProject = async (id) => {
+  const proj = await Project.findByPk(id);
+  if (!proj) throw new Error("Project not found");
+
+  if (proj.project_image) await deleteFileFromGCS(proj.project_image);
+  await Project.destroy({ where:{ id } });
+  await clearProjectCache();
+  refreshProjectCache();
+  return true;
+};
+
+/* ─────────────────────  cron builder ───────────────────── */
+
+const refreshProjectCache = async () => {
   try {
-    const {
-      name,
-      description,
-      deadline,
-      created_by,
-      status,
-      priority,
-      progress,
-      project_type,
-    } = data;
-
-    if (!name || !description || !deadline || !created_by) {
-      throw new Error("Missing required fields: name, description, deadline, or created_by");
-    }
-
-    if (isNaN(created_by)) {
-      throw new Error("Invalid user ID (created_by). It should be a number.");
-    }
-
-    const parsedDeadline = new Date(deadline);
-    if (isNaN(parsedDeadline.getTime())) {
-      throw new Error("Invalid deadline. It should be a valid date.");
-    }
-
-    const validStatuses = ["Pending", "In Progress", "Completed", "On Hold"];
-    if (status && !validStatuses.includes(status)) {
-      throw new Error(`Invalid status. Valid options are: ${validStatuses.join(", ")}`);
-    }
-
-    const validPriorities = ["High", "Medium", "Low"];
-    if (priority && !validPriorities.includes(priority)) {
-      throw new Error(`Invalid priority. Valid options are: ${validPriorities.join(", ")}`);
-    }
-
-    let projectProgress = Number(progress);
-    if (progress !== undefined && (isNaN(projectProgress) || projectProgress < 0 || projectProgress > 100)) {
-      throw new Error("Invalid progress. It should be a number between 0 and 100.");
-    }
-
-    
-    const user = await getUserFromService(created_by);
-    if (!user) {
-      throw new Error("User not found");
-    }
-
-     let project_image = null;
-    if (file) {
-      try {
-        project_image = await uploadFileToS3(file);
-      } catch (uploadError) {
-        throw new Error(`Failed to upload image: ${uploadError.message}`);
-      }
-    }
-
-    const newProject = await Project.create({
-      name,
-      description,
-      deadline: parsedDeadline,
-      created_by,
-      status: status || "Pending",
-      project_image,
-      priority: priority || "Medium",
-      progress: projectProgress || 0, 
-      project_type: project_type || "unknown",
-    });
-
-    return newProject;
-
-  } catch (error) {
-    console.error("Error:", error.message);
-    throw new Error(error.message);
+    await Promise.all([
+      redis.set("projects:count", await Project.count(), "EX", CACHE_TTL),
+      (async () => {
+        const all = await dbAllProjects();
+        await redis.set("projects:all", JSON.stringify(all), "EX", CACHE_TTL);
+      })(),
+      (async () => {
+        for (const t of TYPE_LIST) {
+          const data = await dbProjectsByType(t,1,PAGE_SIZE_DEF);
+          await redis.set(`projects:type:${t}:page:1:size:${PAGE_SIZE_DEF}`, JSON.stringify(data), "EX", CACHE_TTL);
+        }
+      })(),
+      (async () => {
+        const det = await dbProjectDetails();
+        await redis.set("projects:details", JSON.stringify(det), "EX", CACHE_TTL);
+      })(),
+    ]);
+    console.log("✅ Project cache fully rebuilt");
+  } catch (e) {
+    console.error("Cache rebuild failed:", e.message);
   }
 };
 
-  const getAllProjects = async () => {
-    try {
-
-      const projects = await Project.findAll({
-        attributes: [
-          'id', 'name', 'description', 'deadline', 'status', 'priority', 'progress', 'project_image', 'project_type', 'created_at', 'updated_at', 'created_by'
-        ],
-      });
-  
-      const projectsWithUserInfo = await Promise.all(
-        projects.map(async (project) => {
-          try {
-            const user = await getUserFromService(project.created_by);
-  
-            if (!user) {
-              throw new Error("User not found");
-            }
-  
-            return {
-              ...project.toJSON(),
-              creator_id: user.id,
-              creator_name: user.name,
-              creator_email: user.email,
-              creator_role: user.role,
-              creator_profile_image: user.profile_image,
-            };
-
-          } catch (userError) {
-            console.error("Error fetching user data:", userError.message);
-            return {
-              ...project.toJSON(),
-              creator_id: null,
-              creator_name: "Unknown",
-              creator_email: "Unknown",
-              creator_role: "Unknown",
-              creator_profile_image: null,
-            };
-          }
-        })
-      );
-       return projectsWithUserInfo;
-    } catch (error) {
-      console.error("Error fetching projects:", error.message);
-      throw new Error(error.message);
-    }
-  };
-
-  const getSingleProject = async (id) => {
-    try {
-      // Validate the id parameter
-      if (!id || id === 'undefined' || isNaN(parseInt(id))) {
-        throw new Error("Invalid project ID provided");
-      }
-
-      const projectId = parseInt(id);
-      
-      const project = await Project.findOne({
-        where: { id: projectId },
-        attributes: [
-          'id', 'name', 'description', 'deadline', 'status', 'priority', 'progress', 'project_image', 'project_type', 'created_at', 'updated_at', 'created_by'
-        ]
-      });
-  
-      if (!project) {
-        throw new Error("Project not found");
-      }
-  
-      const user = await getUserFromService(project.created_by);
-  
-      if (!user) {
-        throw new Error("User not found");
-      }
-  
-      const projectWithUserInfo = {
-        ...project.toJSON(),
-        creator_id: user.id,
-        creator_name: user.name,
-        creator_email: user.email,
-        creator_role: user.role,
-        creator_profile_image: user.profile_image,
-      };
-       return projectWithUserInfo;
-    } catch (error) {
-      console.error("Error fetching single project with user:", error.message);
-      throw new Error(error.message);
-    }
-  };
-
-  const deleteProject = async (id) => {
-    try {
-      // Validate the id parameter
-      if (!id || id === 'undefined' || isNaN(parseInt(id))) {
-        throw new Error("Invalid project ID provided");
-      }
-
-      const projectId = parseInt(id);
-
-      const project = await Project.findOne({ where: { id: projectId } });
-      
-      if (!project) {
-        throw new Error("Project not found");
-      }
-
-      if (project.project_image) {
-        try {
-          await deleteFileFromS3(project.project_image);
-        } catch (s3Error) {
-          console.error("Warning: Failed to delete image from S3:", s3Error.message);
-         }
-      }
-
-      const deletedCount = await Project.destroy({
-        where: { id: projectId }, 
-      });
-  
-      return deletedCount > 0;
-    } catch (error) {
-      console.error("Error deleting project:", error.message);
-      throw new Error(error.message);
-    }
-  };
-
-  const updateProject = async (id, data, file) => {
-    try {
-      // Validate the id parameter
-      if (!id || id === 'undefined' || isNaN(parseInt(id))) {
-        throw new Error("Invalid project ID provided");
-      }
-
-      const projectId = parseInt(id);
-      const { name, description, deadline, status, priority, progress, project_type } = data;
-  
-      const currentProject = await Project.findOne({ where: { id: projectId } });
-  
-      if (!currentProject) {
-        throw new Error("Project not found");
-      }
-  
-      let project_image = currentProject.project_image;
-      
-      if (file) {
-        try {
-          if (currentProject.project_image) {
-            await deleteFileFromS3(currentProject.project_image);
-          }
-          
-          project_image = await uploadFileToS3(file);
-        } catch (uploadError) {
-          throw new Error(`Failed to upload image: ${uploadError.message}`);
-        }
-      }
-  
-      const updatedFields = {
-        name: name || currentProject.name,
-        description: description || currentProject.description,
-        deadline: deadline || currentProject.deadline,
-        status: status || currentProject.status,
-        priority: priority || currentProject.priority,
-        progress: progress || currentProject.progress,
-        project_image,
-        project_type: project_type || currentProject.project_type,
-      };
-  
-      await Project.update(updatedFields, {
-        where: { id: projectId },
-      });
-  
-      const updatedProject = await Project.findOne({ where: { id: projectId } });
-
-      return updatedProject;
-    } catch (error) {
-      console.error("Error updating project:", error.message);
-      throw new Error(error.message);
-    }
-  };
+/* ─────────────────────  exports ───────────────────── */
 
 module.exports = {
   createProject,
+  updateProject,
+  deleteProject,
+
   getAllProjects,
   getSingleProject,
-  deleteProject,
-  updateProject,
+  getProjectsByType,
+  allProjectDetails,
+  DashboardData,
+
+  refreshProjectCache,
 };

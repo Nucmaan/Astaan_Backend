@@ -1,5 +1,5 @@
 const { DataTypes } = require("sequelize");
-const sequelize = require("../Database/index.js"); 
+const { sequelize } = require("../Database/index.js"); 
 
  const User = sequelize.define(
   "User",
@@ -37,7 +37,7 @@ const sequelize = require("../Database/index.js");
       allowNull: false,
       defaultValue: "User", 
       validate: {
-        isIn: [["User", "Admin", "Translator", "Supervisor", "Voice-over Artist", "Sound Engineer", "Editor"]],
+        isIn: [["User", "Admin", "Translator", "Supervisor", "Voice-over Artist", "Sound Engineer", "Editor","Playout","Interpreter"]],
       },
     },
     profile_image: {

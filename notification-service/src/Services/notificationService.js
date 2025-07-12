@@ -1,5 +1,6 @@
 const axios = require("axios");
 const Notification = require("../Models/notificationModel");
+const redis = require("../utills/redisClient.js");
 
 const userServiceUrl = process.env.USER_SERVICE_URL;
 
@@ -35,6 +36,10 @@ const SendNotification = async (userId, message) => {
       message: message1,
     });
 
+    // Invalidate notification caches
+    await redis.del('notifications:all');
+    await redis.del(`notifications:user:${userId}`);
+
     return {
       success: true,
       message: "Notification sent successfully",
@@ -58,14 +63,21 @@ const SendNotification = async (userId, message) => {
 
 const getAllNotifications = async () => {
   try {
+    // Redis cache check
+    const cacheKey = 'notifications:all';
+    const cached = await redis.get(cacheKey);
+    if (cached) {
+      return JSON.parse(cached);
+    }
     const notifications = await Notification.findAll({
       order: [['created_at', 'DESC']]
     });
-    
-    return {
+    const result = {
       success: true,
       data: notifications
     };
+    await redis.set(cacheKey, JSON.stringify(result), 'EX', 3600);
+    return result;
   } catch (error) {
     console.error("Error fetching notifications:", error.message);
     return {
@@ -77,15 +89,22 @@ const getAllNotifications = async () => {
 
 const getNotificationsByUserId = async (userId) => {
   try {
+    // Redis cache check
+    const cacheKey = `notifications:user:${userId}`;
+    const cached = await redis.get(cacheKey);
+    if (cached) {
+      return JSON.parse(cached);
+    }
     const notifications = await Notification.findAll({
       where: { user_id: userId },
       order: [['created_at', 'DESC']]
     });
-    
-    return {
+    const result = {
       success: true,
       data: notifications
     };
+    await redis.set(cacheKey, JSON.stringify(result), 'EX', 3600);
+    return result;
   } catch (error) {
     console.error("Error fetching user notifications:", error.message);
     return {
@@ -101,7 +120,9 @@ const deleteAllNotifications = async () => {
       where: {},
       truncate: true
     });
-    
+    // Invalidate all notification caches
+    await redis.del('notifications:all');
+    // Optionally, you could scan and delete all keys matching notifications:user:* if needed
     return {
       success: true,
       message: "All notifications deleted successfully"
@@ -125,9 +146,11 @@ const deleteNotification = async (notificationId) => {
         message: "Notification not found"
       };
     }
-    
+    const userId = notification.user_id;
     await notification.destroy();
-    
+    // Invalidate notification caches
+    await redis.del('notifications:all');
+    await redis.del(`notifications:user:${userId}`);
     return {
       success: true,
       message: "Notification deleted successfully"

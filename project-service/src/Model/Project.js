@@ -1,5 +1,5 @@
 const { DataTypes } = require("sequelize");
-const sequelize = require("../Database/index.js");
+const { sequelize } = require("../Database/index.js");
 
 const Project = sequelize.define(
   "Project",
@@ -31,7 +31,7 @@ const Project = sequelize.define(
       type: DataTypes.STRING(20),
       defaultValue: 'Pending',
       validate: {
-        isIn: [['Pending', 'In Progress', 'Completed']],
+        isIn: [['Pending', 'In Progress', 'Completed', 'Planning']],
       },
     },
     priority: {
@@ -53,10 +53,13 @@ const Project = sequelize.define(
       type: DataTypes.STRING(20),
       defaultValue: 'unknown',
       validate: {
-        isIn: [['unknown', 'Movie', 'Musalsal','Documentary']],
+        isIn: [['unknown', 'Movie', 'DRAMA','Documentary','Action','Islamic', 'Cartoon']],
       },
     },  
-
+    channel: {
+      type: DataTypes.STRING(100),
+      defaultValue: null,
+    },
     created_at: {
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,
