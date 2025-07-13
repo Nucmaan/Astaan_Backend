@@ -179,8 +179,7 @@ const deleteProject = async (id) => {
   return true;
 };
 
-/* ─────────────────────  cron builder ───────────────────── */
-
+ 
 const refreshProjectCache = async () => {
   try {
     await Promise.all([
@@ -206,8 +205,29 @@ const refreshProjectCache = async () => {
   }
 };
 
-/* ─────────────────────  exports ───────────────────── */
+const getProjectsByTypePost = async (project_type) => {
+  const projects = await Project.findAll({
+    where: { project_type: project_type },
+    attributes: ["id","name","description","deadline","status","priority",
+                 "progress","project_image","project_type","channel",
+                 "created_at","updated_at","created_by"]
+  });
 
+  const projectsWithUsers = await Promise.all(projects.map(async (p) => {
+    const u = await getUserFromService(p.created_by);
+    return { ...p.toJSON(),
+      creator_name          : u?.name ?? "Unknown",
+    };
+  }));
+
+  return {
+    projects: projectsWithUsers,
+    total: projectsWithUsers.length,
+    project_type: project_type
+  };
+}
+
+ 
 module.exports = {
   createProject,
   updateProject,
@@ -218,6 +238,7 @@ module.exports = {
   getProjectsByType,
   allProjectDetails,
   DashboardData,
+  getProjectsByTypePost,
 
   refreshProjectCache,
 };

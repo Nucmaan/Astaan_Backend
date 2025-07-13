@@ -1,4 +1,4 @@
-const { createProject, getAllProjects, getSingleProject, deleteProject, updateProject, getDashboardData, getProjectsByType, getAllProjectDetails } = require('../Controllers/Project');
+const { createProject, getAllProjects,getProjectsByTypePost, getSingleProject, deleteProject, updateProject, getDashboardData, getProjectsByType, getAllProjectDetails } = require('../Controllers/Project');
 const Router = require('express').Router();
 const { upload } = require('../middleware/uploadMiddleware.js'); 
 
@@ -10,5 +10,6 @@ Router.put('/updateProject/:id',upload.single('project_image'),updateProject);
 Router.get('/dashboard', getDashboardData);
 Router.get('/projects/type/:project_type', getProjectsByType);
 Router.get('/projects/details', getAllProjectDetails);
+Router.post('/projects/byType', getProjectsByTypePost);
 
 module.exports = Router

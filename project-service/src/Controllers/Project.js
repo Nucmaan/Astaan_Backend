@@ -85,6 +85,16 @@ const getAllProjectDetails = async (req, res) => {
     }
 };
 
+const getProjectsByTypePost = async (req, res) => {
+    try {
+        const { project_type } = req.body;
+        const result = await ProjectService.getProjectsByTypePost(project_type);
+        res.status(200).json({ success: true, ...result });
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Error fetching projects by type", error: error.message });
+    }
+};
+
 module.exports = {
     createProject,
     getAllProjects,
@@ -93,5 +103,6 @@ module.exports = {
     updateProject,
     getDashboardData,
     getProjectsByType,
-    getAllProjectDetails
+    getAllProjectDetails,
+    getProjectsByTypePost
 };
