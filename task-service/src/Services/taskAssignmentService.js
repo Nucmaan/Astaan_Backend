@@ -16,8 +16,7 @@ const subTaskServiceUrl      = process.env.SUBTASK_SERVICE_URL;
 
 const CACHE_EXPIRE = 60 * 60 * 24; // 5 minutes
 
-// Cache user info by userId to reduce repeated external calls
-const getUserFromService = async (userId) => {
+ const getUserFromService = async (userId) => {
   const cacheKey = `user:${userId}`;
   const cached = await redis.get(cacheKey);
   if (cached) return JSON.parse(cached);
@@ -77,8 +76,7 @@ const createAssignment = async (taskId, userId) => {
   const emailRes = await sendNotification(user.email);
   if (!emailRes.success) throw new Error("Failed to send notification email");
 
-  // Invalidate related caches
-  await invalidateUserAssignmentsCache(userId);
+   await invalidateUserAssignmentsCache(userId);
   await invalidateAllStatusUpdatesCache();
 
   return { newAssignment, newStatusUpdate };
