@@ -67,6 +67,37 @@ const getAllTaskStatusUpdates = async (req, res) => {
     }
 };
 
+const getCompletedTasksStatusUpdates = async (req, res) => {
+    try {
+        const statusUpdates = await TaskAssignmentService.getCompletedTasksStatusUpdates();
+        statusUpdates.length > 0 
+            ? res.status(200).json({ success: true, statusUpdates })
+            : res.status(404).json({ success: false, message: 'No completed updates found' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Error fetching completed updates', error: error.message });
+    }
+};
+
+const getUsersWithCompletedTasks = async (req, res) => {
+    try {
+        const users = await TaskAssignmentService.getUsersWithCompletedTasks();
+        users.length > 0 
+            ? res.status(200).json({ success: true, users })
+            : res.status(404).json({ success: false, message: 'No users with completed tasks found' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Error fetching users with completed tasks', error: error.message });
+    }
+};
+
+const getUserWithTasks = async (req, res) => {
+    try {
+        const userWithTasks = await TaskAssignmentService.getUserWithTasks(req.params.user_id);
+        res.status(200).json({ success: true, user: userWithTasks });
+    } catch (error) {
+        res.status(404).json({ success: false, message: error.message });
+    }
+};
+
 const submitTheTask = async (req, res) => {
     try {
         const result = await TaskAssignmentService.submitTask(
@@ -81,6 +112,15 @@ const submitTheTask = async (req, res) => {
     }
 };
 
+const getUserLeaderboardStats = async (req, res) => {
+    try {
+        const leaderboard = await TaskAssignmentService.getUserLeaderboardStats();
+        res.status(200).json({ success: true, leaderboard });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Error fetching leaderboard', error: error.message });
+    }
+};
+
 module.exports = {
     createTaskAssignment,
     updateAssignedTask,
@@ -88,5 +128,9 @@ module.exports = {
     editTaskStatusUpdate,
     getUserTaskStatusUpdates,
     getAllTaskStatusUpdates,
+    getCompletedTasksStatusUpdates,
+    getUsersWithCompletedTasks,
+    getUserWithTasks,
+    getUserLeaderboardStats,
     submitTheTask
 };

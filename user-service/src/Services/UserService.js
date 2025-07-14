@@ -124,7 +124,7 @@ const getUsers = async (page = 1, limit = 100) => {
     limit,
     offset,
     order: [["created_at", "DESC"]],
-    attributes: ["id", "employee_id", "name", "email", "mobile", "role", "profile_image", "created_at"],
+    attributes: ["id", "employee_id", "name", "email", "mobile", "role", "profile_image","work_experience_level", "created_at"],
   });
 
   await redis.set(key, JSON.stringify(users), "EX", 600);
@@ -138,7 +138,7 @@ const getSingleUser = async (id) => {
   if (cached) return JSON.parse(cached);
 
   const user = await User.findByPk(id, {
-    attributes: ["id", "employee_id", "name", "email", "mobile", "role", "profile_image", "created_at"],
+    attributes: ["id", "employee_id", "name", "email", "mobile", "role", "profile_image","work_experience_level", "created_at"],
   });
 
   if (!user) throw new Error("User not found");
