@@ -121,6 +121,33 @@ const getUserLeaderboardStats = async (req, res) => {
     }
 };
 
+const getUserTaskStats = async (req, res) => {
+    try {
+        const stats = await TaskAssignmentService.getUserTaskStats(req.params.user_id);
+        res.status(200).json({ success: true, stats });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Error fetching user task stats', error: error.message });
+    }
+};
+
+const getUserCompletedTasks = async (req, res) => {
+    try {
+        const tasks = await TaskAssignmentService.getUserCompletedTasks(req.params.user_id);
+        res.status(200).json({ success: true, tasks });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Error fetching user completed tasks', error: error.message });
+    }
+};
+
+const getUserActiveAssignments = async (req, res) => {
+    try {
+        const assignments = await TaskAssignmentService.getUserActiveAssignments(req.params.user_id);
+        res.status(200).json({ success: true, assignments });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Error fetching user active assignments', error: error.message });
+    }
+};
+
 module.exports = {
     createTaskAssignment,
     updateAssignedTask,
@@ -132,5 +159,8 @@ module.exports = {
     getUsersWithCompletedTasks,
     getUserWithTasks,
     getUserLeaderboardStats,
+    getUserTaskStats,
+    getUserCompletedTasks,
+    getUserActiveAssignments,
     submitTheTask
 };

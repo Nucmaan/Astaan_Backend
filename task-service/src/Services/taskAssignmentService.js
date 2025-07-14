@@ -5,6 +5,8 @@ const SubTask           = require("../Model/subTask.js");          // referenced
 const axios             = require("axios");
 const { Op }            = require("sequelize");
 
+const redis   = require("../utills/redisClient");
+
 const { uploadFileToGCS, deleteFileFromGCS } = require("../utills/gcpSetup.js");
 const sendNotification  = require("../utills/sendEmail.js");
 
@@ -12,17 +14,46 @@ const userServiceUrl        = process.env.USER_SERVICE_URL;
 const notificationServiceUrl = process.env.NOTIFICATION_SERVICE_URL;
 const subTaskServiceUrl      = process.env.SUBTASK_SERVICE_URL;
 
- 
+const CACHE_EXPIRE = 60 * 60 * 24; // 5 minutes
+
+// Cache user info by userId to reduce repeated external calls
 const getUserFromService = async (userId) => {
+  const cacheKey = `user:${userId}`;
+  const cached = await redis.get(cacheKey);
+  if (cached) return JSON.parse(cached);
+
   try {
     const response = await axios.get(`${userServiceUrl}/api/auth/users/${userId}`);
+    if (response.data.user) {
+      await redis.set(cacheKey, JSON.stringify(response.data.user), "EX", CACHE_EXPIRE);
+    }
     return response.data.user;
   } catch (err) {
     console.error("Error fetching user:", err.message);
     return null;
   }
 };
- 
+
+const invalidateUserCache = async (userId) => {
+  await redis.del(`user:${userId}`);
+};
+
+const invalidateUserAssignmentsCache = async (userId) => {
+  await redis.del(`userAssignments:${userId}`);
+  await redis.del(`userStatusUpdates:${userId}`);
+  await redis.del(`userWithTasks:${userId}`);
+  await redis.del(`userTaskStats:${userId}`);
+  await redis.del(`userCompletedTasks:${userId}`);
+  await redis.del(`userActiveAssignments:${userId}`);
+};
+
+const invalidateAllStatusUpdatesCache = async () => {
+  await redis.del(`allStatusUpdates`);
+  await redis.del(`completedTasksStatusUpdates`);
+  await redis.del(`usersWithCompletedTasks`);
+  await redis.del(`userLeaderboardStats`);
+};
+
 const createAssignment = async (taskId, userId) => {
   const task = await Task.findByPk(taskId);
   if (!task) throw new Error("Task not found");
@@ -38,7 +69,6 @@ const createAssignment = async (taskId, userId) => {
     status: "To Do",
   });
 
-   
   await axios.post(`${notificationServiceUrl}/api/notifications/send`, {
     userId,
     message: "New Task Assigned",
@@ -47,22 +77,36 @@ const createAssignment = async (taskId, userId) => {
   const emailRes = await sendNotification(user.email);
   if (!emailRes.success) throw new Error("Failed to send notification email");
 
+  // Invalidate related caches
+  await invalidateUserAssignmentsCache(userId);
+  await invalidateAllStatusUpdatesCache();
+
   return { newAssignment, newStatusUpdate };
 };
- 
+
 const getUserStatusUpdates = async (userId) => {
+  const cacheKey = `userStatusUpdates:${userId}`;
+  const cached = await redis.get(cacheKey);
+  if (cached) return JSON.parse(cached);
+
   const user = await getUserFromService(userId);
   if (!user) throw new Error("User not found");
 
-  return TaskStatusUpdate.findAll({
+  const data = await TaskStatusUpdate.findAll({
     where: { updated_by: userId },
     include: [{ model: Task }],
     order: [["updated_at", "DESC"]],
   });
+
+  await redis.set(cacheKey, JSON.stringify(data), "EX", CACHE_EXPIRE);
+  return data;
 };
- 
 
 const getUserAssignments = async (userId) => {
+  const cacheKey = `userAssignments:${userId}`;
+  const cached = await redis.get(cacheKey);
+  if (cached) return JSON.parse(cached);
+
   const user = await getUserFromService(userId);
   if (!user) throw new Error("User not found");
 
@@ -71,9 +115,11 @@ const getUserAssignments = async (userId) => {
     include: [{ model: SubTask }],
   });
 
-  return assignments.map((a) => a.SubTask);
+  const result = assignments.map((a) => a.SubTask);
+  await redis.set(cacheKey, JSON.stringify(result), "EX", CACHE_EXPIRE);
+  return result;
 };
- 
+
 const submitTask = async (taskId, updatedBy, status, files) => {
   if (!files || !status) throw new Error("File and status are required");
 
@@ -86,7 +132,6 @@ const submitTask = async (taskId, updatedBy, status, files) => {
   const user = await getUserFromService(updatedBy);
   if (!user) throw new Error("User not found");
 
-  
   let fileUrls = [];
   if (files.length) {
     fileUrls = await Promise.all(files.map(uploadFileToGCS));
@@ -102,7 +147,6 @@ const submitTask = async (taskId, updatedBy, status, files) => {
     }
   }
 
-  /* 2. Update SubTask status + file URL */
   await SubTask.update(
     {
       status,
@@ -112,7 +156,6 @@ const submitTask = async (taskId, updatedBy, status, files) => {
     { where: { id: taskId } }
   );
 
-   
   let hours = 0,
     minutes = 0;
   if (status === "Completed") {
@@ -132,7 +175,6 @@ const submitTask = async (taskId, updatedBy, status, files) => {
     }
   }
 
- 
   const taskStatusUpdate = await TaskStatusUpdate.create({
     task_id: taskId,
     updated_by: updatedBy,
@@ -142,9 +184,13 @@ const submitTask = async (taskId, updatedBy, status, files) => {
     time_taken_in_minutes: minutes,
   });
 
+  // Invalidate caches related to this user
+  await invalidateUserAssignmentsCache(updatedBy);
+  await invalidateAllStatusUpdatesCache();
+
   return { success: true, task, taskStatusUpdate };
 };
- 
+
 const updateAssignment = async (taskId, oldUserId, newUserId) => {
   const newUser = await getUserFromService(newUserId);
   if (!newUser) throw new Error("New user not found");
@@ -162,9 +208,14 @@ const updateAssignment = async (taskId, oldUserId, newUserId) => {
     status: "To Do",
   });
 
+  // Invalidate caches for both old and new user
+  await invalidateUserAssignmentsCache(oldUserId);
+  await invalidateUserAssignmentsCache(newUserId);
+  await invalidateAllStatusUpdatesCache();
+
   return { assignment, newStatus };
 };
- 
+
 const editStatusUpdate = async (statusUpdateId, status) => {
   const allowed = ["To Do", "In Progress", "Review", "Completed"];
   if (!allowed.includes(status)) throw new Error("Invalid status");
@@ -196,26 +247,34 @@ const editStatusUpdate = async (statusUpdateId, status) => {
     }
   }
 
-   await axios.put(`${subTaskServiceUrl}/api/subtasks/UpdateSubTask/${statusUpdate.task_id}`, { status });
+  await axios.put(`${subTaskServiceUrl}/api/subtasks/UpdateSubTask/${statusUpdate.task_id}`, { status });
 
-   await statusUpdate.update({
+  await statusUpdate.update({
     status,
     updated_at: new Date(),
     time_taken_in_hours: h,
     time_taken_in_minutes: m,
   });
 
+  // Invalidate caches for the user who updated this
+  await invalidateUserAssignmentsCache(statusUpdate.updated_by);
+  await invalidateAllStatusUpdatesCache();
+
   return statusUpdate;
 };
 
 const getAllStatusUpdates = async () => {
+  const cacheKey = `allStatusUpdates`;
+  const cached = await redis.get(cacheKey);
+  if (cached) return JSON.parse(cached);
+
   const statusUpdates = await TaskStatusUpdate.findAll({
     include: [{ model: Task }],
     order: [["updatedAt", "DESC"]],
     raw: true,
   });
 
-   return Promise.all(
+  const result = await Promise.all(
     statusUpdates.map(async (u) => {
       const user = await getUserFromService(u.updated_by);
       return {
@@ -225,17 +284,22 @@ const getAllStatusUpdates = async () => {
       };
     })
   );
+
+  await redis.set(cacheKey, JSON.stringify(result), "EX", CACHE_EXPIRE);
+  return result;
 };
 
 const getCompletedTasksStatusUpdates = async () => {
-  // 1. Fetch all status updates, ordered by updatedAt DESC
+  const cacheKey = `completedTasksStatusUpdates`;
+  const cached = await redis.get(cacheKey);
+  if (cached) return JSON.parse(cached);
+
   const statusUpdates = await TaskStatusUpdate.findAll({
     include: [{ model: Task }],
     order: [["updatedAt", "DESC"]],
     raw: true,
   });
 
-  // 2. Filter to unique (task_id, updated_by) pairs (keep only the latest)
   const taskUpdatesMap = new Map();
   const uniqueTaskUpdates = statusUpdates.filter((update) => {
     const taskKey = `${update.task_id}-${update.updated_by}`;
@@ -246,11 +310,9 @@ const getCompletedTasksStatusUpdates = async () => {
     return false;
   });
 
-  // 3. Filter to only those with status 'Completed'
   const completedTasks = uniqueTaskUpdates.filter((task) => task["status"] === "Completed");
 
-  // 4. Attach user info as before
-  return Promise.all(
+  const result = await Promise.all(
     completedTasks.map(async (u) => {
       const user = await getUserFromService(u.updated_by);
       return {
@@ -260,10 +322,16 @@ const getCompletedTasksStatusUpdates = async () => {
       };
     })
   );
+
+  await redis.set(cacheKey, JSON.stringify(result), "EX", CACHE_EXPIRE);
+  return result;
 };
 
 const getUsersWithCompletedTasks = async () => {
-  // 1. Fetch all users from user service
+  const cacheKey = `usersWithCompletedTasks`;
+  const cached = await redis.get(cacheKey);
+  if (cached) return JSON.parse(cached);
+
   let users = [];
   try {
     const response = await axios.get(`${userServiceUrl}/api/auth/users`);
@@ -273,18 +341,15 @@ const getUsersWithCompletedTasks = async () => {
     return [];
   }
 
-  // 2. Fetch all completed tasks (latest per task/user pair)
   const completedTasks = await getCompletedTasksStatusUpdates();
 
-  // 3. Map userId to completed tasks
   const userIdToTasks = {};
   completedTasks.forEach(task => {
     if (!userIdToTasks[task.updated_by]) userIdToTasks[task.updated_by] = [];
     userIdToTasks[task.updated_by].push(task);
   });
 
-  // 4. Filter users who have completed tasks and return required info
-  return users
+  const result = users
     .filter(user => userIdToTasks[user.id] && userIdToTasks[user.id].length > 0)
     .map(user => ({
       id: user.id,
@@ -294,10 +359,16 @@ const getUsersWithCompletedTasks = async () => {
       work_experience_level: user.work_experience_level,
       completedTasks: userIdToTasks[user.id],
     }));
+
+  await redis.set(cacheKey, JSON.stringify(result), "EX", CACHE_EXPIRE);
+  return result;
 };
 
 const getUserWithTasks = async (userId) => {
-  // 1. Fetch user info
+  const cacheKey = `userWithTasks:${userId}`;
+  const cached = await redis.get(cacheKey);
+  if (cached) return JSON.parse(cached);
+
   let user = null;
   try {
     const response = await axios.get(`${userServiceUrl}/api/auth/users/${userId}`);
@@ -306,7 +377,6 @@ const getUserWithTasks = async (userId) => {
     throw new Error("User not found");
   }
 
-  // 2. Fetch all status updates for this user
   const statusUpdates = await TaskStatusUpdate.findAll({
     where: { updated_by: userId },
     include: [{ model: Task }],
@@ -314,7 +384,6 @@ const getUserWithTasks = async (userId) => {
     raw: true,
   });
 
-  // 3. Keep only the latest update per task
   const taskUpdatesMap = new Map();
   const uniqueUserTasks = statusUpdates.filter((update) => {
     const taskKey = `${update.task_id}`;
@@ -325,15 +394,13 @@ const getUserWithTasks = async (userId) => {
     return false;
   });
 
-  // 4. Attach user info to each task (optional)
   const tasksWithUser = uniqueUserTasks.map((u) => ({
     ...u,
     assigned_user: user.name,
     profile_image: user.profile_image,
   }));
 
-  // 5. Return user info + tasks
-  return {
+  const result = {
     id: user.id,
     name: user.name,
     role: user.role,
@@ -341,10 +408,16 @@ const getUserWithTasks = async (userId) => {
     work_experience_level: user.work_experience_level,
     tasks: tasksWithUser,
   };
+
+  await redis.set(cacheKey, JSON.stringify(result), "EX", CACHE_EXPIRE);
+  return result;
 };
 
 const getUserLeaderboardStats = async () => {
-  // 1. Fetch all users from user service
+  const cacheKey = `userLeaderboardStats`;
+  const cached = await redis.get(cacheKey);
+  if (cached) return JSON.parse(cached);
+
   let users = [];
   try {
     const response = await axios.get(`${userServiceUrl}/api/auth/users`);
@@ -354,14 +427,12 @@ const getUserLeaderboardStats = async () => {
     return [];
   }
 
-  // 2. Fetch all latest task status updates (latest per task/user pair)
   const statusUpdates = await TaskStatusUpdate.findAll({
     include: [{ model: Task }],
     order: [["updatedAt", "DESC"]],
     raw: true,
   });
 
-  // 3. Keep only the latest update for each (task_id, updated_by) pair
   const taskUpdatesMap = new Map();
   const uniqueTaskUpdates = statusUpdates.filter((update) => {
     const taskKey = `${update.task_id}-${update.updated_by}`;
@@ -372,8 +443,7 @@ const getUserLeaderboardStats = async () => {
     return false;
   });
 
-  // 4. For each user, count tasks by status
-  return users.map(user => {
+  const result = users.map(user => {
     const userTasks = uniqueTaskUpdates.filter(task => task.updated_by === user.id);
     const todoTasks = userTasks.filter(task => task.status === "To Do").length;
     const inProgressTasks = userTasks.filter(task => task.status === "In Progress").length;
@@ -395,8 +465,98 @@ const getUserLeaderboardStats = async () => {
       completionRate,
     };
   });
+
+  await redis.set(cacheKey, JSON.stringify(result), "EX", CACHE_EXPIRE);
+  return result;
 };
 
+const getUserTaskStats = async (userId) => {
+  const cacheKey = `userTaskStats:${userId}`;
+  const cached = await redis.get(cacheKey);
+  if (cached) return JSON.parse(cached);
+
+  // 1. Fetch all latest status updates for this user
+  const statusUpdates = await TaskStatusUpdate.findAll({
+    where: { updated_by: userId },
+    include: [{ model: Task }],
+    order: [["updatedAt", "DESC"]],
+    raw: true,
+  });
+
+  // 2. Keep only the latest update per task
+  const taskUpdatesMap = new Map();
+  const uniqueTasks = statusUpdates.filter((task) => {
+    const taskKey = `${task.task_id}`;
+    if (!taskUpdatesMap.has(taskKey)) {
+      taskUpdatesMap.set(taskKey, true);
+      return true;
+    }
+    return false;
+  });
+
+  // 3. Calculate stats
+  const now = new Date();
+  const total = uniqueTasks.length;
+  const completed = uniqueTasks.filter((task) => task.status === 'Completed').length;
+  const inProgress = uniqueTasks.filter((task) => task.status === 'In Progress').length;
+  const toDo = uniqueTasks.filter((task) => task.status === 'To Do').length;
+  const overdue = uniqueTasks.filter((task) => {
+    // Check deadline inside included Task or SubTask, adjust accordingly
+    const deadline = new Date(task["SubTask.deadline"] || task["Task.deadline"]);
+    return deadline < now && task.status !== 'Completed';
+  }).length;
+
+  const result = { total, completed, inProgress, toDo, overdue };
+  await redis.set(cacheKey, JSON.stringify(result), "EX", CACHE_EXPIRE);
+  return result;
+};
+
+const getUserCompletedTasks = async (userId) => {
+  const cacheKey = `userCompletedTasks:${userId}`;
+  const cached = await redis.get(cacheKey);
+  if (cached) return JSON.parse(cached);
+
+  // 1. Fetch all status updates for this user with status 'Completed'
+  const statusUpdates = await TaskStatusUpdate.findAll({
+    where: { updated_by: userId, status: 'Completed' },
+    include: [{ model: Task }],
+    order: [["updatedAt", "DESC"]],
+    raw: true,
+  });
+
+  // 2. Keep only the latest update per subtask
+  const taskUpdatesMap = new Map();
+  const latestTasks = statusUpdates.filter((task) => {
+    const subtaskId = task["SubTask.id"];
+    if (!taskUpdatesMap.has(subtaskId)) {
+      taskUpdatesMap.set(subtaskId, true);
+      return true;
+    }
+    return false;
+  });
+
+  await redis.set(cacheKey, JSON.stringify(latestTasks), "EX", CACHE_EXPIRE);
+  return latestTasks;
+};
+
+const getUserActiveAssignments = async (userId) => {
+  const cacheKey = `userActiveAssignments:${userId}`;
+  const cached = await redis.get(cacheKey);
+  if (cached) return JSON.parse(cached);
+
+  // Fetch all assignments for the user where status is not 'Completed'
+  const assignments = await TaskAssignment.findAll({
+    where: { user_id: userId },
+    include: [{ model: SubTask }],
+    raw: true,
+  });
+
+  // Only return assignments where SubTask.status is not 'Completed'
+  const filtered = assignments.filter(a => a["SubTask.status"] !== 'Completed');
+
+  await redis.set(cacheKey, JSON.stringify(filtered), "EX", CACHE_EXPIRE);
+  return filtered;
+};
 
 module.exports = {
   createAssignment,
@@ -405,9 +565,12 @@ module.exports = {
   editStatusUpdate,
   getUserStatusUpdates,
   getAllStatusUpdates,
-  getCompletedTasksStatusUpdates, // <-- Export the new function
+  getCompletedTasksStatusUpdates,  
   getUsersWithCompletedTasks,
   submitTask,
   getUserWithTasks,
   getUserLeaderboardStats,
+  getUserTaskStats,
+  getUserCompletedTasks,
+  getUserActiveAssignments,
 };
