@@ -203,7 +203,7 @@ const updateTask = async (id, data, file) => {
 
 // 📦 Project Tasks
 const getAllProjectTasks = async (project_id, page = 1) => {
-  const PAGE_SIZE = 2;
+  const PAGE_SIZE = 50;
   const offset = (page - 1) * PAGE_SIZE;
   const key = `tasks:project:${project_id}:page:${page}:size:${PAGE_SIZE}`;
   const cached = await redis.get(key);
