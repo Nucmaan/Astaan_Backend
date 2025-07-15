@@ -65,6 +65,10 @@ const createTask = async (data, file) => {
   await redis.del("tasks:all");
   await redis.del(`tasks:project:${project_id}`);
 
+  // Invalidate all paginated caches for this project
+  const keys = await redis.keys(`tasks:project:${project_id}:page:*:size:*`);
+  if (keys.length > 0) await redis.del(...keys);
+
   return { success: true, message: "Task created successfully", task: newTask };
 };
 
@@ -143,6 +147,10 @@ const deleteTask = async (id) => {
   await redis.del(`tasks:project:${task.project_id}`);
   await redis.del(TASK_COUNT_KEY);
 
+  // Invalidate all paginated caches for this project
+  const keys = await redis.keys(`tasks:project:${task.project_id}:page:*:size:*`);
+  if (keys.length > 0) await redis.del(...keys);
+
   return { success: true, message: "Task deleted" };
 };
 
@@ -180,25 +188,48 @@ const updateTask = async (id, data, file) => {
   await redis.del(`tasks:project:${task.project_id}`);
   if (newProjectId && newProjectId !== task.project_id) {
     await redis.del(`tasks:project:${newProjectId}`);
+    // Invalidate all paginated caches for the new project
+    const newKeys = await redis.keys(`tasks:project:${newProjectId}:page:*:size:*`);
+    if (newKeys.length > 0) await redis.del(...newKeys);
   }
+  await redis.del(TASK_COUNT_KEY);
+
+  // Invalidate all paginated caches for this project
+  const keys = await redis.keys(`tasks:project:${task.project_id}:page:*:size:*`);
+  if (keys.length > 0) await redis.del(...keys);
 
   return { success: true, message: "Task updated", task };
 };
 
 // 📦 Project Tasks
-const getAllProjectTasks = async (project_id) => {
-  const key = `tasks:project:${project_id}`;
+const getAllProjectTasks = async (project_id, page = 1) => {
+  const PAGE_SIZE = 2;
+  const offset = (page - 1) * PAGE_SIZE;
+  const key = `tasks:project:${project_id}:page:${page}:size:${PAGE_SIZE}`;
   const cached = await redis.get(key);
   if (cached) return JSON.parse(cached);
 
   const check = await checkProjectExists(project_id);
   if (!check.success) return { success: false, message: check.message };
 
-  const tasks = await Task.findAll({ where: { project_id } });
+  const { rows: tasks, count: total } = await Task.findAndCountAll({
+    where: { project_id },
+    limit: PAGE_SIZE,
+    offset: offset,
+    order: [['id', 'DESC']]
+  });
+
+  const totalPages = Math.ceil(total / PAGE_SIZE);
   const result = {
     success: true,
     project: check.project,
     tasks,
+    total,
+    page,
+    pageSize: PAGE_SIZE,
+    totalPages,
+    hasNext: page < totalPages,
+    hasPrevious: page > 1
   };
 
   await redis.set(key, JSON.stringify(result), "EX", TASK_CACHE_TTL);

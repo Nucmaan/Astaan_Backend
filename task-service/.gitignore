@@ -1,4 +1,4 @@
 .env
 public
 node_modules/
-/src/utils/key.json
+/src/utills/key.json

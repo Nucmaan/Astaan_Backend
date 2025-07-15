@@ -38,7 +38,8 @@ const deleteTask = async (req, res) => {
 
 const getAllProjectTasks = async (req, res) => {
     try {
-        const result = await TaskService.getAllProjectTasks(req.params.project_id);
+        const page = parseInt(req.query.page, 10) || 1;
+        const result = await TaskService.getAllProjectTasks(req.params.project_id, page);
         res.status(result.success ? 200 : 404).json(result);
     } catch (error) {
         res.status(500).json({ success: false, message: "Error fetching project tasks", error: error.message });

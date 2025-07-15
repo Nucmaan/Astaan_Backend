@@ -205,12 +205,18 @@ const refreshProjectCache = async () => {
   }
 };
 
-const getProjectsByTypePost = async (project_type) => {
-  const projects = await Project.findAll({
+const getProjectsByTypePost = async (project_type, page = 1) => {
+  const PAGE_SIZE = 50;
+  const offset = (page - 1) * PAGE_SIZE;
+
+  const { rows: projects, count: total } = await Project.findAndCountAll({
     where: { project_type: project_type },
     attributes: ["id","name","description","deadline","status","priority",
                  "progress","project_image","project_type","channel",
-                 "created_at","updated_at","created_by"]
+                 "created_at","updated_at","created_by"],
+    limit: PAGE_SIZE,
+    offset: offset,
+    order: [['created_at', 'DESC']]
   });
 
   const projectsWithUsers = await Promise.all(projects.map(async (p) => {
@@ -220,10 +226,17 @@ const getProjectsByTypePost = async (project_type) => {
     };
   }));
 
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+
   return {
     projects: projectsWithUsers,
-    total: projectsWithUsers.length,
-    project_type: project_type
+    total,
+    page,
+    pageSize: PAGE_SIZE,
+    totalPages,
+    hasNext: page < totalPages,
+    hasPrevious: page > 1,
+    project_type
   };
 }
 
@@ -232,13 +245,11 @@ module.exports = {
   createProject,
   updateProject,
   deleteProject,
-
   getAllProjects,
   getSingleProject,
   getProjectsByType,
   allProjectDetails,
   DashboardData,
   getProjectsByTypePost,
-
   refreshProjectCache,
 };
