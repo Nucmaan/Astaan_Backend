@@ -21,9 +21,8 @@ const sequelize = new Sequelize(process.env.DATABASE_URL, {
 
 async function connect() {
   try {
-    await sequelize.authenticate();
-    await sequelize.sync({ alter: true });
-    console.log("Database connected & synced");
+    await sequelize.authenticate(); 
+    console.log("Database connected");
   } catch (error) {
     console.error("Database connection failed:", error);
     throw error; 

@@ -32,5 +32,8 @@
     "pg-promise": "^11.13.0",
     "sequelize": "^6.37.6",
     "sharp": "^0.34.2"
+  },
+  "devDependencies": {
+    "sequelize-cli": "^6.6.3"
   }
 }
