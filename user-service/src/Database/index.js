@@ -21,12 +21,12 @@ const sequelize = new Sequelize(process.env.DATABASE_URL, {
 async function connect() {
   try {
     await sequelize.authenticate();
-    await sequelize.sync({ alter: true });
-    console.log("Database connected & synced");
+    console.log("Database connected");
   } catch (error) {
     console.error("Database connection failed:", error);
     throw error; 
   }
 }
+
 
 module.exports = { sequelize, connect };
