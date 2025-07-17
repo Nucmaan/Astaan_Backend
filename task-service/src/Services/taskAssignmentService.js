@@ -118,8 +118,9 @@ const getUserAssignments = async (userId) => {
   return result;
 };
 
-const submitTask = async (taskId, updatedBy, status, files) => {
-  if (!files || !status) throw new Error("File and status are required");
+const submitTask = async (taskId, updatedBy,status) => {
+
+  if (!status ) throw new Error("status are required");
 
   const allowed = ["To Do", "In Progress", "Review", "Completed"];
   if (!allowed.includes(status)) throw new Error("Invalid status");
@@ -130,25 +131,10 @@ const submitTask = async (taskId, updatedBy, status, files) => {
   const user = await getUserFromService(updatedBy);
   if (!user) throw new Error("User not found");
 
-  let fileUrls = [];
-  if (files.length) {
-    fileUrls = await Promise.all(files.map(uploadFileToGCS));
-
-    // delete old files
-    if (task.file_url) {
-      try {
-        const old = JSON.parse(task.file_url);
-        if (Array.isArray(old)) await Promise.all(old.map(deleteFileFromGCS));
-      } catch {
-        await deleteFileFromGCS(task.file_url).catch(() => {});
-      }
-    }
-  }
 
   await SubTask.update(
     {
       status,
-      file_url: fileUrls.length ? JSON.stringify(fileUrls) : task.file_url,
       updatedAt: new Date(),
     },
     { where: { id: taskId } }
@@ -171,7 +157,7 @@ const submitTask = async (taskId, updatedBy, status, files) => {
         minutes = diffMin % 60;
       }
     }
-  }
+  } 
 
   const taskStatusUpdate = await TaskStatusUpdate.create({
     task_id: taskId,

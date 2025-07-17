@@ -104,7 +104,6 @@ const submitTheTask = async (req, res) => {
             req.params.task_id,
             req.body.updated_by,
             req.body.status,
-            req.files
         );
         res.status(200).json(result);
     } catch (error) {
