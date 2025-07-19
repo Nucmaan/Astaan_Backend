@@ -28,6 +28,11 @@ const TaskStatusUpdate = sequelize.define("TaskStatusUpdate", {
       isIn: [["To Do", "In Progress", "Review", "Completed"]],
     },
   },
+  assignedby_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true
+  },
+  
   updated_at: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW,

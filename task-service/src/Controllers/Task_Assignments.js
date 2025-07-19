@@ -2,7 +2,9 @@ const TaskAssignmentService = require("../Services/taskAssignmentService.js");
 
 const createTaskAssignment = async (req, res) => {
     try {
-        const assignment = await TaskAssignmentService.createAssignment(req.body.task_id, req.body.user_id);
+        console.log(req.body);
+        
+        const assignment = await TaskAssignmentService.createAssignment(req.body.task_id, req.body.user_id, req.body.assignedby_id);
         res.status(201).json({ success: true, message: 'Task assigned successfully', assignment });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Error assigning task', error: error.message });

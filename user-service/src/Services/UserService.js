@@ -107,6 +107,7 @@ const loginUser = async (identifier, password) => {
       name: user.name,
       email: user.email,
       mobile: user.mobile,
+      employee_id : user.employee_id,
       role: user.role,
       profile_image: user.profile_image,
     },

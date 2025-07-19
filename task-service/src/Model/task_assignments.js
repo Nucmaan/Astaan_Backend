@@ -25,6 +25,10 @@ const TaskAssignment = sequelize.define("TaskAssignment", {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW,  
   },
+  assignedby_id: {
+    type: DataTypes.INTEGER,
+    allowNull: false
+  }  
 });
 
  

@@ -17,6 +17,7 @@ const subTaskServiceUrl      = process.env.SUBTASK_SERVICE_URL;
 const CACHE_EXPIRE = 60 * 60 * 24; // 5 minutes
 
  const getUserFromService = async (userId) => {
+  console.log("find this id : ",userId)
   const cacheKey = `user:${userId}`;
   const cached = await redis.get(cacheKey);
   if (cached) return JSON.parse(cached);
@@ -53,19 +54,20 @@ const invalidateAllStatusUpdatesCache = async () => {
   await redis.del(`userLeaderboardStats`);
 };
 
-const createAssignment = async (taskId, userId) => {
+const createAssignment = async (taskId, userId, assignedby_id) => {
   const task = await Task.findByPk(taskId);
   if (!task) throw new Error("Task not found");
 
   const user = await getUserFromService(userId);
   if (!user) throw new Error("User not found");
-
-  const newAssignment = await TaskAssignment.create({ task_id: taskId, user_id: userId });
+ 
+  const newAssignment = await TaskAssignment.create({ task_id: taskId, user_id: userId, assignedby_id : assignedby_id});
 
   const newStatusUpdate = await TaskStatusUpdate.create({
     task_id: taskId,
     updated_by: userId,
     status: "To Do",
+    assignedby_id : assignedby_id
   });
 
   await axios.post(`${notificationServiceUrl}/api/notifications/send`, {
@@ -73,10 +75,10 @@ const createAssignment = async (taskId, userId) => {
     message: "New Task Assigned",
   });
 
-  const emailRes = await sendNotification(user.email);
-  if (!emailRes.success) throw new Error("Failed to send notification email");
+  //const emailRes = await sendNotification(user.email);
+ // if (!emailRes.success) throw new Error("Failed to send notification email");
 
-   await invalidateUserAssignmentsCache(userId);
+  await invalidateUserAssignmentsCache(userId);
   await invalidateAllStatusUpdatesCache();
 
   return { newAssignment, newStatusUpdate };
@@ -152,12 +154,31 @@ const submitTask = async (taskId, updatedBy,status) => {
         order: [["updated_at", "DESC"]],
       });
       if (inProg) {
-        const diffMin = Math.floor((Date.now() - new Date(inProg.updated_at)) / 60000);
-        hours = Math.floor(diffMin / 60);
-        minutes = diffMin % 60;
+        // Use estimated_hours from subtask for time calculation
+        const estimated = task.estimated_hours;
+        let totalMinutes = 0;
+        if (typeof estimated === "number" || typeof estimated === "string") {
+          const str = estimated.toString();
+          if (str.includes(".")) {
+            const [h, m] = str.split(".");
+            totalMinutes = parseInt(h, 10) * 60 + parseInt(m, 10);
+          } else {
+            const value = parseInt(str, 10);
+            if (value <= 59) {
+              totalMinutes = value;
+            } else {
+              totalMinutes = value;
+            }
+          }
+        }
+        hours = Math.floor(totalMinutes / 60);
+        minutes = totalMinutes % 60;
       }
     }
   } 
+
+  const assignment = await TaskAssignment.findOne({ where: { task_id: taskId, user_id: updatedBy } });
+  const assignedby_id = assignment ? assignment.assignedby_id : null;
 
   const taskStatusUpdate = await TaskStatusUpdate.create({
     task_id: taskId,
@@ -166,6 +187,7 @@ const submitTask = async (taskId, updatedBy,status) => {
     updated_at: new Date(),
     time_taken_in_hours: hours,
     time_taken_in_minutes: minutes,
+    assignedby_id
   });
 
   // Invalidate caches related to this user
