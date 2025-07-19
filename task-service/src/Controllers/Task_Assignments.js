@@ -149,6 +149,19 @@ const getUserActiveAssignments = async (req, res) => {
     }
 };
 
+const getUsersWithCompletedTasksAssignedBySoundEngineer = async (req, res) => {
+    try {
+        // Optionally allow role as query param, default to 'Sound Engineer'
+        const role = req.query.role || 'Sound Engineer';
+        const users = await TaskAssignmentService.getUsersWithCompletedTasksAssignedBySoundEngineer(role);
+        users.length > 0 
+            ? res.status(200).json({ success: true, users })
+            : res.status(404).json({ success: false, message: 'No users with completed tasks assigned by Sound Engineer found' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Error fetching users with completed tasks assigned by Sound Engineer', error: error.message });
+    }
+};
+
 module.exports = {
     createTaskAssignment,
     updateAssignedTask,
@@ -163,5 +176,6 @@ module.exports = {
     getUserTaskStats,
     getUserCompletedTasks,
     getUserActiveAssignments,
-    submitTheTask
+    submitTheTask,
+    getUsersWithCompletedTasksAssignedBySoundEngineer
 };

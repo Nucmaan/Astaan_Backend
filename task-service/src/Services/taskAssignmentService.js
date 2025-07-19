@@ -517,6 +517,25 @@ const getUserTaskStats = async (userId) => {
   return result;
 };
 
+const getUserActiveAssignments = async (userId) => {
+  const cacheKey = `userActiveAssignments:${userId}`;
+  const cached = await redis.get(cacheKey);
+  if (cached) return JSON.parse(cached);
+
+  // Fetch all assignments for the user where status is not 'Completed'
+  const assignments = await TaskAssignment.findAll({
+    where: { user_id: userId },
+    include: [{ model: SubTask }],
+    raw: true,
+  });
+
+  // Only return assignments where SubTask.status is not 'Completed'
+  const filtered = assignments.filter(a => a["SubTask.status"] !== 'Completed');
+
+  await redis.set(cacheKey, JSON.stringify(filtered), "EX", CACHE_EXPIRE);
+  return filtered;
+};
+
 const getUserCompletedTasks = async (userId) => {
   const cacheKey = `userCompletedTasks:${userId}`;
   const cached = await redis.get(cacheKey);
@@ -545,24 +564,68 @@ const getUserCompletedTasks = async (userId) => {
   return latestTasks;
 };
 
-const getUserActiveAssignments = async (userId) => {
-  const cacheKey = `userActiveAssignments:${userId}`;
-  const cached = await redis.get(cacheKey);
-  if (cached) return JSON.parse(cached);
+const getUsersWithCompletedTasksAssignedBySoundEngineer = async (role = "Sound Engineer") => {
+  let users = [];
+  try {
+    const response = await axios.get(`${userServiceUrl}/api/auth/users`);
+    users = response.data.users || [];
+  } catch (err) {
+    console.error("Error fetching users:", err.message);
+    return [];
+  }
 
-  // Fetch all assignments for the user where status is not 'Completed'
-  const assignments = await TaskAssignment.findAll({
-    where: { user_id: userId },
-    include: [{ model: SubTask }],
-    raw: true,
-  });
+  const completedTasks = await getCompletedTasksStatusUpdates();
 
-  // Only return assignments where SubTask.status is not 'Completed'
-  const filtered = assignments.filter(a => a["SubTask.status"] !== 'Completed');
+  // Cache assigner lookups to avoid duplicate requests
+  const assignerCache = {};
 
-  await redis.set(cacheKey, JSON.stringify(filtered), "EX", CACHE_EXPIRE);
-  return filtered;
+  // Group completed tasks by user
+  const userIdToTasks = {};
+  for (const task of completedTasks) {
+    if (!task.assignedby_id) continue;
+
+    // Fetch assigner info if not cached
+    if (!assignerCache[task.assignedby_id]) {
+      try {
+        const assignerRes = await axios.get(`${userServiceUrl}/api/auth/users/${task.assignedby_id}`);
+        assignerCache[task.assignedby_id] = assignerRes.data.user;
+      } catch (err) {
+        assignerCache[task.assignedby_id] = null;
+      }
+    }
+    const assigner = assignerCache[task.assignedby_id];
+    if (assigner && assigner.role === role) {
+      // Only keep required fields for assigner
+      const assignerInfo = {
+        name: assigner.name,
+        work_experience_level: assigner.work_experience_level,
+        role: assigner.role
+      };
+      // Only keep required fields for the task
+      const taskWithAssigner = {
+        "SubTask.title": task["SubTask.title"],
+        "SubTask.description": task["SubTask.description"],
+        "SubTask.status": task["SubTask.status"],
+        time_taken_in_hours: task.time_taken_in_hours,
+        time_taken_in_minutes: task.time_taken_in_minutes,
+        assigner: assignerInfo
+      };
+      if (!userIdToTasks[task.updated_by]) userIdToTasks[task.updated_by] = [];
+      userIdToTasks[task.updated_by].push(taskWithAssigner);
+    }
+  }
+
+  // Build the result
+  const result = users
+    .filter(user => userIdToTasks[user.id] && userIdToTasks[user.id].length > 0)
+    .map(user => ({
+      name: user.name,
+      completedTasks: userIdToTasks[user.id],
+    }));
+
+  return result;
 };
+
 
 module.exports = {
   createAssignment,
@@ -579,4 +642,5 @@ module.exports = {
   getUserTaskStats,
   getUserCompletedTasks,
   getUserActiveAssignments,
+  getUsersWithCompletedTasksAssignedBySoundEngineer
 };
