@@ -1,5 +1,5 @@
-const express = require('express');
-const notificationRoutes = require('./routes/notificationRoutes.js');
+const express = require("express");
+const notificationRoutes = require("./routes/notificationRoutes.js");
 const cors = require("cors");
 
 const app = express();
@@ -20,7 +20,8 @@ app.use(
       ) {
         callback(null, true);
       } else {
-        callback(new Error("Not allowed by CORS"));
+        console.warn(`🚫 CORS Blocked: ${origin}`);
+        callback(null, false);
       }
     },
     credentials: true,
@@ -28,14 +29,10 @@ app.use(
   })
 );
 
-app.get('/', (req, res) => {
-    res.send('Notification Service ')
-  })
+app.get("/", (req, res) => {
+  res.send("Notification Service ");
+});
 
-app.use('/api/notifications', notificationRoutes);
-
+app.use("/api/notifications", notificationRoutes);
 
 module.exports = app;
-
-
-
