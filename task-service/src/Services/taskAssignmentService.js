@@ -17,8 +17,7 @@ const subTaskServiceUrl      = process.env.SUBTASK_SERVICE_URL;
 const CACHE_EXPIRE = 60 * 60 * 24; // 5 minutes
 
  const getUserFromService = async (userId) => {
-  console.log("find this id : ",userId)
-  const cacheKey = `user:${userId}`;
+   const cacheKey = `user:${userId}`;
   const cached = await redis.get(cacheKey);
   if (cached) return JSON.parse(cached);
 
@@ -606,6 +605,8 @@ const getUsersWithCompletedTasksAssignedBySoundEngineer = async (role = "Sound E
         "SubTask.title": task["SubTask.title"],
         "SubTask.description": task["SubTask.description"],
         "SubTask.status": task["SubTask.status"],
+        "SubTask.time_spent": task["SubTask.time_spent"],
+        "SubTask.estimated_hours": task["SubTask.estimated_hours"],
         time_taken_in_hours: task.time_taken_in_hours,
         time_taken_in_minutes: task.time_taken_in_minutes,
         assigner: assignerInfo

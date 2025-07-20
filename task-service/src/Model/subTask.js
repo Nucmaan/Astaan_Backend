@@ -43,9 +43,16 @@ const SubTask = sequelize.define(
         min: 0.1,
       },
     },
+
+    time_spent: {
+      type: DataTypes.FLOAT,
+      allowNull: true,   
+    },
+
     start_time: {
       type: DataTypes.DATE,
     },
+
     file_url: {
       type: DataTypes.TEXT,
       allowNull: true,

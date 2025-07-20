@@ -29,7 +29,9 @@ const SendNotification = async (req, res) => {
 
 const getAllNotifications = async (req, res) => {
   try {
-    const response = await notificationService.getAllNotifications();
+    const page = parseInt(req.query.page) || 1;
+    
+    const response = await notificationService.getAllNotifications(page);
     
     if (!response.success) {
       return res.status(400).json({ message: response.message });
@@ -37,7 +39,7 @@ const getAllNotifications = async (req, res) => {
     
     res.status(200).json({ 
       message: "Notifications retrieved successfully", 
-      data: response.data 
+      ...response
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
