@@ -35,7 +35,9 @@ const getSingleProject = async (req, res) => {
 
 const deleteProject = async (req, res) => {
     try {
-        const isDeleted = await ProjectService.deleteProject(req.params.id);
+        // Accept page from query, body, or default to 1
+        const page = parseInt(req.query.page, 10) || parseInt(req.body.page, 10) || 1;
+        const isDeleted = await ProjectService.deleteProject(req.params.id, page);
         if (isDeleted) {
             res.status(200).json({ success: true, message: "Project deleted successfully" });
         } else {

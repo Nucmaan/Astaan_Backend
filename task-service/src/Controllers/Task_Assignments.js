@@ -162,6 +162,19 @@ const getUsersWithCompletedTasksAssignedBySoundEngineer = async (req, res) => {
     }
 };
 
+
+
+// In your routes file
+  const latestOne = async (req, res) => {
+    try {
+      const { taskId } = req.params;
+      const assignments = await TaskAssignmentService.getLatestAssignmentsByTaskId(taskId);
+      res.json({ assignments });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+
 module.exports = {
     createTaskAssignment,
     updateAssignedTask,
@@ -177,5 +190,6 @@ module.exports = {
     getUserCompletedTasks,
     getUserActiveAssignments,
     submitTheTask,
-    getUsersWithCompletedTasksAssignedBySoundEngineer
+    getUsersWithCompletedTasksAssignedBySoundEngineer,
+     latestOne
 };

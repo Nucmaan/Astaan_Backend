@@ -29,7 +29,9 @@ const getAllTasks = async (req, res) => {
 
 const deleteTask = async (req, res) => {
     try {
-        const result = await TaskService.deleteTask(req.params.id);
+        const page = parseInt(req.query.page, 10) || null;
+
+        const result = await TaskService.deleteTask(req.params.id, page);
         res.status(200).json(result);
     } catch (error) {
         res.status(500).json({ success: false, message: "Error deleting task", error: error.message });

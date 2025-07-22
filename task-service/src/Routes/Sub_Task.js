@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 
-const { createSubTask,getAllSubTasks,getSubTaskById,updateSubTask,deleteSubTask, getSubTasksByTaskId, countAllSubTasks } = require("../Controllers/subTask.js");
+const { createSubTask,getAllSubTasks,getSubtasksWithStatusByTaskId,getSubTaskById,updateSubTask,deleteSubTask, getSubTasksByTaskId, countAllSubTasks } = require("../Controllers/subTask.js");
 
 const { upload } = require('../middleware/uploadMiddleware.js'); 
 

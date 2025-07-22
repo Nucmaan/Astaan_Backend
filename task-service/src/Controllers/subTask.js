@@ -74,6 +74,7 @@ const countAllSubTasks = async (req, res) => {
   }
 };
 
+
 module.exports = {
   createSubTask,
   getAllSubTasks,
@@ -81,5 +82,5 @@ module.exports = {
   updateSubTask,
   deleteSubTask,
   getSubTasksByTaskId,
-  countAllSubTasks
+  countAllSubTasks,
 };
