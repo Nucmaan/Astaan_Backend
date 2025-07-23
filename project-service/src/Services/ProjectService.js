@@ -67,10 +67,6 @@ const dbProjectsByType = async (type, page, size) => {
     where: { project_type: type },
     offset,
     limit : size,
-<<<<<<< HEAD
-    order: [['updated_at', 'DESC']],  
-=======
->>>>>>> parent of 2d23c43 (v0.01)
     attributes: ["id","name","description","deadline","status","priority",
                  "progress","project_image","project_type","channel",
                  "created_at","updated_at","created_by"]
@@ -167,26 +163,8 @@ const updateProject = async (id, body, file) => {
     project_image: img
   },{ where:{ id }});
 
-<<<<<<< HEAD
-   const PAGE_SIZE = 50;
-  const type = body.project_type || proj.project_type || "unknown";
-  const cacheKey = `projects:type:${type}:page:1:size:${PAGE_SIZE}`;
-   const { rows, count } = await Project.findAndCountAll({
-    where: { project_type: type },
-    offset: 0,
-    limit: PAGE_SIZE,
-    order: [['updated_at', 'DESC']],
-    attributes: ["id","name","description","deadline","status","priority","progress","project_image","project_type","channel","created_at","updated_at","created_by"]
-  });
-  const data = { projects: rows, total: count, page: 1, pageSize: PAGE_SIZE, totalPages: Math.ceil(count/PAGE_SIZE) };
-  await redis.set(cacheKey, JSON.stringify(data), "EX", CACHE_TTL);
-
-   await redis.del("projects:count", "projects:all");
-
-=======
   await clearProjectCache();
   refreshProjectCache();
->>>>>>> parent of 2d23c43 (v0.01)
   return Project.findByPk(id);
 };
 
@@ -201,24 +179,6 @@ const deleteProject = async (id) => {
   return true;
 };
 
-<<<<<<< HEAD
- const refreshProjectCache = async () => {
-  try {
-     await redis.set("projects:count", await Project.count(), "EX", CACHE_TTL);
-
-     const all = await dbAllProjects();
-    await redis.set("projects:all", JSON.stringify(all), "EX", CACHE_TTL);
-
-     for (const t of TYPE_LIST) {
-      const data = await dbProjectsByType(t, 1, PAGE_SIZE_DEF);
-      await redis.set(`projects:type:${t}:page:1:size:${PAGE_SIZE_DEF}`, JSON.stringify(data), "EX", CACHE_TTL);
-    }
-
-     const det = await dbProjectDetails();
-    await redis.set("projects:details", JSON.stringify(det), "EX", CACHE_TTL);
-
-   } catch (e) {
-=======
  
 const refreshProjectCache = async () => {
   try {
@@ -241,7 +201,6 @@ const refreshProjectCache = async () => {
     ]);
     console.log("✅ Project cache fully rebuilt");
   } catch (e) {
->>>>>>> parent of 2d23c43 (v0.01)
     console.error("Cache rebuild failed:", e.message);
   }
 };

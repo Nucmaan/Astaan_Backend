@@ -14,11 +14,6 @@ const userServiceUrl        = process.env.USER_SERVICE_URL;
 const notificationServiceUrl = process.env.NOTIFICATION_SERVICE_URL;
 const subTaskServiceUrl      = process.env.SUBTASK_SERVICE_URL;
 
-<<<<<<< HEAD
- 
-const getUserFromService = async (userId) => {
- 
-=======
 const CACHE_EXPIRE = 60 * 60 * 24; // 5 minutes
 
  const getUserFromService = async (userId) => {
@@ -26,7 +21,6 @@ const CACHE_EXPIRE = 60 * 60 * 24; // 5 minutes
   const cached = await redis.get(cacheKey);
   if (cached) return JSON.parse(cached);
 
->>>>>>> parent of 2d23c43 (v0.01)
   try {
     const response = await axios.get(`${userServiceUrl}/api/auth/users/${userId}`);
     if (response.data.user) {
@@ -35,12 +29,6 @@ const CACHE_EXPIRE = 60 * 60 * 24; // 5 minutes
     return response.data.user;
   } catch (err) {
     console.error("Error fetching user:", err.message);
-<<<<<<< HEAD
-    if (err.response) {
-       console.error("Status:", err.response.status);
-    }
-=======
->>>>>>> parent of 2d23c43 (v0.01)
     return null;
   }
 };
@@ -343,21 +331,10 @@ const getCompletedTasksStatusUpdates = async () => {
   return result;
 };
 
-<<<<<<< HEAD
-const getUsersWithCompletedTasks = async (month, role) => {
-   let targetMonth;
-  if (!month) {
-    const now = new Date();
-    targetMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  } else {
-    targetMonth = month;
-  }
-=======
 const getUsersWithCompletedTasks = async () => {
   const cacheKey = `usersWithCompletedTasks`;
   const cached = await redis.get(cacheKey);
   if (cached) return JSON.parse(cached);
->>>>>>> parent of 2d23c43 (v0.01)
 
   let users = [];
   try {
@@ -673,57 +650,6 @@ const getUsersWithCompletedTasksAssignedBySoundEngineer = async (role = "Sound E
   return result;
 };
 
-<<<<<<< HEAD
-const getStatusUpdatesByTaskId = async (taskId) => {
- 
-  const updates = await TaskStatusUpdate.findAll({
-    where: { task_id: taskId },
-    order: [["updatedAt", "DESC"]],
-    raw: true,
-  });
-  const latestAssignments = {};
-  for (const update of updates) {
-    if (
-      !latestAssignments[update.task_id] ||
-      new Date(update.updatedAt) > new Date(latestAssignments[update.task_id].updatedAt)
-    ) {
-      const user = await getUserFromService(update.updated_by);
-      latestAssignments[update.task_id] = {
-        assigned_user: user?.name || "Unknown",
-        profile_image: user?.profile_image || null,
-        updated_by: update.updated_by,
-        updatedAt: update.updatedAt,
-      };
-    }
-  }
-   return latestAssignments;
-};
-
-const getLatestAssignmentsByTaskId = async (taskId) => {
-   const subTasks = await SubTask.findAll({ where: { task_id: taskId }, raw: true });
-  const subTaskIds = subTasks.map(st => st.id);
-
-   const latestAssignments = {};
-  for (const subTaskId of subTaskIds) {
-    const statusUpdate = await TaskStatusUpdate.findOne({
-      where: { task_id: subTaskId },
-      order: [["updatedAt", "DESC"]],
-      raw: true,
-    });
-    if (statusUpdate) {
-      const user = await getUserFromService(statusUpdate.updated_by);
-      latestAssignments[subTaskId] = {
-        assigned_user: user ? user.name : "Unknown User",
-        profile_image: user ? user.profile_image : null,
-        updated_by: statusUpdate.updated_by,
-        updated_at: statusUpdate.updatedAt,
-      };
-    }
-  }
-  return latestAssignments;
-};
-=======
->>>>>>> parent of 2d23c43 (v0.01)
 
 module.exports = {
   createAssignment,

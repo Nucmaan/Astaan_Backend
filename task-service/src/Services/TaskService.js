@@ -127,14 +127,8 @@ const getTaskCount = async () => {
   return count;
 };
 
-<<<<<<< HEAD
-const deleteTask = async (id, page) => {
-  const PAGE_SIZE = 50; 
-
-=======
 // 🗑️ Delete
 const deleteTask = async (id) => {
->>>>>>> parent of 2d23c43 (v0.01)
   const task = await Task.findByPk(id);
   if (!task) return { success: false, message: "Task not found" };
 
@@ -148,11 +142,7 @@ const deleteTask = async (id) => {
 
   await task.destroy();
 
-<<<<<<< HEAD
-   await redis.del(`task:${id}`);
-=======
   await redis.del(`task:${id}`);
->>>>>>> parent of 2d23c43 (v0.01)
   await redis.del("tasks:all");
   await redis.del(`tasks:project:${task.project_id}`);
   await redis.del(TASK_COUNT_KEY);

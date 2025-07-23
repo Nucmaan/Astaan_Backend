@@ -1,10 +1,6 @@
 const SubTask = require("../Model/subTask");
 const redis   = require("../utills/redisClient");
 const { uploadFileToGCS, deleteFileFromGCS } = require("../utills/gcpSetup");
-<<<<<<< HEAD
- 
-const createSubTask = async (data, file) => {
-=======
 const { parseCustomTimeToMinutes } = require("../utills/parseTime.js");
 
 const SUBTASK_CACHE_TTL = 60 * 60 * 24;               
@@ -26,7 +22,6 @@ const SUBTASK_COUNT_KEY = "subtasks:count";
 };
 
  const createSubTask = async (data, file) => {
->>>>>>> parent of 2d23c43 (v0.01)
   let file_url = "";
   if (file) file_url = await uploadFileToGCS(file);
 

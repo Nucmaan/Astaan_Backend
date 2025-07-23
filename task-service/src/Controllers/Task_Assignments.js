@@ -173,21 +173,6 @@ const getUsersWithCompletedTasksAssignedBySoundEngineer = async (req, res) => {
     }
 };
 
-<<<<<<< HEAD
-
-
-   const latestOne = async (req, res) => {
-    try {
-      const { taskId } = req.params;
-      const assignments = await TaskAssignmentService.getLatestAssignmentsByTaskId(taskId);
-      res.json({ assignments });
-    } catch (err) {
-      res.status(500).json({ error: err.message });
-    }
-  }
-
-=======
->>>>>>> parent of 2d23c43 (v0.01)
 module.exports = {
     createTaskAssignment,
     updateAssignedTask,
