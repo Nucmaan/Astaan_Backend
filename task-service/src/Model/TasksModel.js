@@ -48,6 +48,12 @@ const Task = sequelize.define(
   },
   {
     timestamps: true, 
+    indexes: [
+      {
+        fields: ['project_id'],
+        name: 'idx_task_project_id'
+      }
+    ]
   }
 );
 

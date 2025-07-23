@@ -24,12 +24,9 @@ const uploadFileToGCS = async (file) => {
     let fileName = file.originalname.replace(/\s+/g, '-');
     let contentType = file.mimetype;
 
-    // Only optimize if it's an image
-    if (/image\/(jpeg|png|webp)/.test(file.mimetype)) {
-      // Use sharp to resize and compress
-      const sharpInstance = sharp(file.buffer).resize({ width: 1200, withoutEnlargement: true });
-      // Convert to webp for best performance, or jpeg for compatibility
-      if (file.mimetype === 'image/png' || file.mimetype === 'image/jpeg') {
+     if (/image\/(jpeg|png|webp)/.test(file.mimetype)) {
+       const sharpInstance = sharp(file.buffer).resize({ width: 1200, withoutEnlargement: true });
+       if (file.mimetype === 'image/png' || file.mimetype === 'image/jpeg') {
         optimizedBuffer = await sharpInstance.webp({ quality: 80 }).toBuffer();
         fileName = fileName.replace(/\.(jpg|jpeg|png)$/i, '.webp');
         contentType = 'image/webp';
@@ -100,8 +97,7 @@ const updateFileInGCS = async (file, fileName) => {
 const deleteFileFromGCS = async (fileUrl) => {
   try {
     if (!fileUrl) throw new Error('No file URL provided');
-    // Accept either a full URL or just the file name
-    let fileName = fileUrl;
+     let fileName = fileUrl;
     if (fileUrl.startsWith('http')) {
       fileName = fileUrl.split('/').pop();
     }

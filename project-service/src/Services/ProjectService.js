@@ -65,7 +65,7 @@ const dbProjectsByType = async (type, page, size) => {
     where: { project_type: type },
     offset,
     limit : size,
-    order: [['updated_at', 'DESC']], // Ensure most recently updated/created projects come first
+    order: [['updated_at', 'DESC']],  
     attributes: ["id","name","description","deadline","status","priority",
                  "progress","project_image","project_type","channel",
                  "created_at","updated_at","created_by"]
@@ -157,12 +157,10 @@ const updateProject = async (id, body, file) => {
     project_image: img
   },{ where:{ id }});
 
-  // Only refresh page 1 cache for this type, order by updated_at DESC
-  const PAGE_SIZE = 50;
+   const PAGE_SIZE = 50;
   const type = body.project_type || proj.project_type || "unknown";
   const cacheKey = `projects:type:${type}:page:1:size:${PAGE_SIZE}`;
-  // Use order: [['updated_at', 'DESC']]
-  const { rows, count } = await Project.findAndCountAll({
+   const { rows, count } = await Project.findAndCountAll({
     where: { project_type: type },
     offset: 0,
     limit: PAGE_SIZE,
@@ -172,8 +170,7 @@ const updateProject = async (id, body, file) => {
   const data = { projects: rows, total: count, page: 1, pageSize: PAGE_SIZE, totalPages: Math.ceil(count/PAGE_SIZE) };
   await redis.set(cacheKey, JSON.stringify(data), "EX", CACHE_TTL);
 
-  // Optionally, update project count and all-projects cache
-  await redis.del("projects:count", "projects:all");
+   await redis.del("projects:count", "projects:all");
 
   return Project.findByPk(id);
 };
@@ -202,28 +199,22 @@ const deleteProject = async (id, page = 1) => {
   return true;
 };
 
-// Utility: Manual full cache rebuild (for admin/maintenance use only)
-const refreshProjectCache = async () => {
+ const refreshProjectCache = async () => {
   try {
-    // Rebuild project count
-    await redis.set("projects:count", await Project.count(), "EX", CACHE_TTL);
+     await redis.set("projects:count", await Project.count(), "EX", CACHE_TTL);
 
-    // Rebuild all projects list
-    const all = await dbAllProjects();
+     const all = await dbAllProjects();
     await redis.set("projects:all", JSON.stringify(all), "EX", CACHE_TTL);
 
-    // Rebuild per-type, page 1 caches
-    for (const t of TYPE_LIST) {
+     for (const t of TYPE_LIST) {
       const data = await dbProjectsByType(t, 1, PAGE_SIZE_DEF);
       await redis.set(`projects:type:${t}:page:1:size:${PAGE_SIZE_DEF}`, JSON.stringify(data), "EX", CACHE_TTL);
     }
 
-    // Rebuild project details
-    const det = await dbProjectDetails();
+     const det = await dbProjectDetails();
     await redis.set("projects:details", JSON.stringify(det), "EX", CACHE_TTL);
 
-    console.log("✅ Project cache fully rebuilt (manual utility)");
-  } catch (e) {
+   } catch (e) {
     console.error("Cache rebuild failed:", e.message);
   }
 };

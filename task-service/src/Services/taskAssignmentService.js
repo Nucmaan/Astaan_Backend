@@ -1,7 +1,7 @@
 const TaskAssignment    = require("../Model/task_assignments.js");
-const Task              = require("../Model/subTask.js");          // parent “Task” model
+const Task              = require("../Model/subTask.js");          
 const TaskStatusUpdate  = require("../Model/task_status_updates.js");
-const SubTask           = require("../Model/subTask.js");          // referenced sub‑task
+const SubTask           = require("../Model/subTask.js");          
 const axios             = require("axios");
 const { Op }            = require("sequelize");
 
@@ -14,8 +14,7 @@ const userServiceUrl        = process.env.USER_SERVICE_URL;
 const notificationServiceUrl = process.env.NOTIFICATION_SERVICE_URL;
 const subTaskServiceUrl      = process.env.SUBTASK_SERVICE_URL;
 
-//const CACHE_EXPIRE = 60 * 60 * 24; // 5 minutes
-
+ 
 const getUserFromService = async (userId) => {
  
   try {
@@ -24,8 +23,7 @@ const getUserFromService = async (userId) => {
   } catch (err) {
     console.error("Error fetching user:", err.message);
     if (err.response) {
-      console.error("Response data:", err.response.data);
-      console.error("Status:", err.response.status);
+       console.error("Status:", err.response.status);
     }
     return null;
   }
@@ -121,8 +119,7 @@ const submitTask = async (taskId, updatedBy,status) => {
         order: [["updated_at", "DESC"]],
       });
       if (inProg) {
-        // Use estimated_hours from subtask for time calculation
-        const estimated = task.estimated_hours;
+         const estimated = task.estimated_hours;
         let totalMinutes = 0;
         if (typeof estimated === "number" || typeof estimated === "string") {
           const str = estimated.toString();
@@ -280,7 +277,14 @@ const getCompletedTasksStatusUpdates = async () => {
   return result;
 };
 
-const getUsersWithCompletedTasks = async () => {
+const getUsersWithCompletedTasks = async (month, role) => {
+   let targetMonth;
+  if (!month) {
+    const now = new Date();
+    targetMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  } else {
+    targetMonth = month;
+  }
 
   let users = [];
   try {
@@ -291,24 +295,54 @@ const getUsersWithCompletedTasks = async () => {
     return [];
   }
 
-  const completedTasks = await getCompletedTasksStatusUpdates();
+   if (role) {
+    users = users.filter(u => u.role === role);
+  }
 
-  const userIdToTasks = {};
+   const completedTasks = await getCompletedTasksStatusUpdates();
+
+   const getRateForExperienceLevel = (experienceLevel) => {
+    switch (experienceLevel) {
+      case "Entry Level":
+        return 5.00;
+      case "Mid Level":
+        return 6.00;
+      case "Senior Level":
+        return 8.00;
+      default:
+        return 5.00;
+    }
+  };
+
+   const userIdToTasks = {};
   completedTasks.forEach(task => {
+     const updatedAt = new Date(task.updated_at);
+    const taskMonth = `${updatedAt.getFullYear()}-${String(updatedAt.getMonth() + 1).padStart(2, '0')}`;
+    if (taskMonth !== targetMonth) return;
     if (!userIdToTasks[task.updated_by]) userIdToTasks[task.updated_by] = [];
     userIdToTasks[task.updated_by].push(task);
   });
 
-  const result = users
+   const result = users
     .filter(user => userIdToTasks[user.id] && userIdToTasks[user.id].length > 0)
-    .map(user => ({
-      id: user.id,
-      name: user.name,
-      profile_image: user.profile_image,
-      role : user.role,
-      work_experience_level: user.work_experience_level,
-      completedTasks: userIdToTasks[user.id],
-    }));
+    .map(user => {
+      const userCompletedTasks = userIdToTasks[user.id];
+      const totalHours = userCompletedTasks.reduce(
+        (sum, t) => sum + (t["SubTask.estimated_hours"] || 0),
+        0
+      );
+      const hourlyRate = getRateForExperienceLevel(user.work_experience_level);
+      const monthlyCommission = totalHours * hourlyRate;
+      return {
+        id: user.id,
+        name: user.name,
+        role: user.role,
+        work_experience_level: user.work_experience_level,
+        hourlyRate,
+        totalHours,
+        monthlyCommission
+      };
+    });
 
   return result;
 };
@@ -495,8 +529,7 @@ const getUsersWithCompletedTasksAssignedBySoundEngineer = async (role = "Sound E
   for (const task of completedTasks) {
     if (!task.assignedby_id) continue;
 
-    // Fetch assigner info if not cached
-    if (!assignerCache[task.assignedby_id]) {
+     if (!assignerCache[task.assignedby_id]) {
       try {
         const assignerRes = await axios.get(`${userServiceUrl}/api/auth/users/${task.assignedby_id}`);
         assignerCache[task.assignedby_id] = assignerRes.data.user;
@@ -506,21 +539,17 @@ const getUsersWithCompletedTasksAssignedBySoundEngineer = async (role = "Sound E
     }
     const assigner = assignerCache[task.assignedby_id];
     if (assigner && assigner.role === role) {
-      // Only keep required fields for assigner
-      const assignerInfo = {
+       const assignerInfo = {
         name: assigner.name,
         work_experience_level: assigner.work_experience_level,
         role: assigner.role
       };
-      // Only keep required fields for the task
-      const taskWithAssigner = {
+       const taskWithAssigner = {
         "SubTask.title": task["SubTask.title"],
         "SubTask.description": task["SubTask.description"],
         "SubTask.status": task["SubTask.status"],
         "SubTask.time_spent": task["SubTask.time_spent"],
         "SubTask.estimated_hours": task["SubTask.estimated_hours"],
-        time_taken_in_hours: task.time_taken_in_hours,
-        time_taken_in_minutes: task.time_taken_in_minutes,
         assigner: assignerInfo
       };
       if (!userIdToTasks[task.updated_by]) userIdToTasks[task.updated_by] = [];
@@ -528,8 +557,7 @@ const getUsersWithCompletedTasksAssignedBySoundEngineer = async (role = "Sound E
     }
   }
 
-  // Build the result
-  const result = users
+   const result = users
     .filter(user => userIdToTasks[user.id] && userIdToTasks[user.id].length > 0)
     .map(user => ({
       name: user.name,
@@ -565,12 +593,10 @@ const getStatusUpdatesByTaskId = async (taskId) => {
 };
 
 const getLatestAssignmentsByTaskId = async (taskId) => {
-  // Get all subtasks for the task
-  const subTasks = await SubTask.findAll({ where: { task_id: taskId }, raw: true });
+   const subTasks = await SubTask.findAll({ where: { task_id: taskId }, raw: true });
   const subTaskIds = subTasks.map(st => st.id);
 
-  // Get latest status update for each subtask
-  const latestAssignments = {};
+   const latestAssignments = {};
   for (const subTaskId of subTaskIds) {
     const statusUpdate = await TaskStatusUpdate.findOne({
       where: { task_id: subTaskId },

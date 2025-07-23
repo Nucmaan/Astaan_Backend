@@ -50,6 +50,12 @@ const SubTask = sequelize.define(
       defaultValue: 0.01, 
     },
 
+    assignee_name: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      defaultValue: "Not Specified",
+    },
+
     start_time: {
       type: DataTypes.DATE,
     },

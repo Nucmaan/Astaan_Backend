@@ -1,6 +1,6 @@
 const { DataTypes, Op } = require("sequelize");
 const { sequelize } = require("../Database/index.js");
-const Task = require("./subTask.js");
+const SubTask = require("./subTask.js");
 
 const TaskStatusUpdate = sequelize.define("TaskStatusUpdate", {
   id: {
@@ -12,7 +12,7 @@ const TaskStatusUpdate = sequelize.define("TaskStatusUpdate", {
     type: DataTypes.INTEGER,
     allowNull: false,
     references: {
-      model: Task,
+      model: SubTask,
       key: "id",
     },
     onDelete: "CASCADE",
@@ -47,6 +47,10 @@ const TaskStatusUpdate = sequelize.define("TaskStatusUpdate", {
   },
 }, {
   timestamps: true, 
+  indexes: [
+    { fields: ['task_id'], name: 'idx_taskstatusupdate_task_id' },
+    { fields: ['task_id', 'updated_at'], name: 'idx_taskstatusupdate_task_id_updated_at' }
+  ]
 });
  
 

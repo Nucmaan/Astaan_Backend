@@ -34,14 +34,14 @@ app.use(
 );
 
 const limiter = rateLimit({
-	windowMs: 60 * 60 * 1000, 
-	limit: 100,
-	standardHeaders: 'draft-8', 
-	legacyHeaders: false, 
-  message: 'Too many requests from this IP, please try again later.'  
+  windowMs: 15 * 60 * 1000,  
+  limit: 1000, 
+  standardHeaders: "draft-8",  
+  legacyHeaders: false,       
+  message: "Too many requests from this IP, please try again later.",
  })
 
- //app.use(limiter)
+ app.use(limiter)
 
 app.use(express.json());
 app.use(cookieParser());

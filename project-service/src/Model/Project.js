@@ -60,6 +60,7 @@ const Project = sequelize.define(
       type: DataTypes.STRING(100),
       defaultValue: null,
     },
+    
     created_at: {
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,
@@ -68,10 +69,18 @@ const Project = sequelize.define(
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,
     },
+    
   },
+  
   {
     tableName: "projects",
     timestamps: false, 
+    indexes: [
+      {
+        fields: ['project_type'],  
+        name: 'idx_project_type'   
+      }
+    ]
   }
 );
 

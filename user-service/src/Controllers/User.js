@@ -121,8 +121,7 @@ const logoutUser = async (req, res) => {
   }
 };
 
-// Dashboard controller
-const getDashboardData = async (req, res) => {
+ const getDashboardData = async (req, res) => {
   try {
     const data = await UserService.DashboardData();
     res.status(200).json({ success: true, dashboard: data });

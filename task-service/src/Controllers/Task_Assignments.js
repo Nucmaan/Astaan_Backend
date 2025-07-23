@@ -82,9 +82,21 @@ const getCompletedTasksStatusUpdates = async (req, res) => {
 
 const getUsersWithCompletedTasks = async (req, res) => {
     try {
-        const users = await TaskAssignmentService.getUsersWithCompletedTasks();
+        const { month, role } = req.query;
+        const users = await TaskAssignmentService.getUsersWithCompletedTasks(month, role);
+        const totalStaff = users.length;
+        const totalHours = users.reduce((sum, u) => sum + u.totalHours, 0);
+        const averageRate = totalStaff > 0 ? (users.reduce((sum, u) => sum + u.hourlyRate, 0) / totalStaff) : 0;
+        const totalCommission = users.reduce((sum, u) => sum + u.monthlyCommission, 0);
         users.length > 0 
-            ? res.status(200).json({ success: true, users })
+            ? res.status(200).json({ 
+                success: true, 
+                users, 
+                totalStaff, 
+                totalHours, 
+                averageRate, 
+                totalCommission 
+            })
             : res.status(404).json({ success: false, message: 'No users with completed tasks found' });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Error fetching users with completed tasks', error: error.message });
@@ -151,8 +163,7 @@ const getUserActiveAssignments = async (req, res) => {
 
 const getUsersWithCompletedTasksAssignedBySoundEngineer = async (req, res) => {
     try {
-        // Optionally allow role as query param, default to 'Sound Engineer'
-        const role = req.query.role || 'Sound Engineer';
+         const role = req.query.role || 'Sound Engineer';
         const users = await TaskAssignmentService.getUsersWithCompletedTasksAssignedBySoundEngineer(role);
         users.length > 0 
             ? res.status(200).json({ success: true, users })
@@ -164,8 +175,7 @@ const getUsersWithCompletedTasksAssignedBySoundEngineer = async (req, res) => {
 
 
 
-// In your routes file
-  const latestOne = async (req, res) => {
+   const latestOne = async (req, res) => {
     try {
       const { taskId } = req.params;
       const assignments = await TaskAssignmentService.getLatestAssignmentsByTaskId(taskId);

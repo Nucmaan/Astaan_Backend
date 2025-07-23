@@ -120,7 +120,7 @@ const getTaskCount = async () => {
 };
 
 const deleteTask = async (id, page) => {
-  const PAGE_SIZE = 3; // Match your getAllProjectTasks page size
+  const PAGE_SIZE = 50; 
 
   const task = await Task.findByPk(id);
   if (!task) return { success: false, message: "Task not found" };
@@ -135,8 +135,7 @@ const deleteTask = async (id, page) => {
 
   await task.destroy();
 
-  // Invalidate all relevant caches
-  await redis.del(`task:${id}`);
+   await redis.del(`task:${id}`);
   await redis.del("tasks:all");
   await redis.del(`tasks:project:${task.project_id}`);
   await redis.del(TASK_COUNT_KEY);
@@ -178,21 +177,19 @@ const updateTask = async (id, data, file) => {
   await redis.del(`tasks:project:${task.project_id}`);
   if (newProjectId && newProjectId !== task.project_id) {
     await redis.del(`tasks:project:${newProjectId}`);
-    // Invalidate all paginated caches for the new project
-    const newKeys = await redis.keys(`tasks:project:${newProjectId}:page:*:size:*`);
+     const newKeys = await redis.keys(`tasks:project:${newProjectId}:page:*:size:*`);
     if (newKeys.length > 0) await redis.del(...newKeys);
   }
   await redis.del(TASK_COUNT_KEY);
 
-  // Invalidate all paginated caches for this project
-  const keys = await redis.keys(`tasks:project:${task.project_id}:page:*:size:*`);
+   const keys = await redis.keys(`tasks:project:${task.project_id}:page:*:size:*`);
   if (keys.length > 0) await redis.del(...keys);
 
   return { success: true, message: "Task updated", task };
 };
 
 const getAllProjectTasks = async (project_id, page = 1) => {
-  const PAGE_SIZE = 3;
+  const PAGE_SIZE = 50;
   const offset = (page - 1) * PAGE_SIZE;
   const key = `tasks:project:${project_id}:page:${page}:size:${PAGE_SIZE}`;
   const cached = await redis.get(key);

@@ -6,26 +6,23 @@ const sendResetLink = require("../utills/sendEmail");
 const { uploadFileToGCS, deleteFileFromGCS } = require("../utills/gcpSetup");
 const User = require("../model/User");
 
-const USER_CACHE_TTL = 60 * 60 * 24; // 24 hours
+const USER_CACHE_TTL = 60 * 60 * 24;  
 const USER_COUNT_TTL = 60 * 60 * 24;
 const USER_COUNT_KEY = "users:count";
 const USER_ALL_PAGE_KEY = "users:page:1:limit:100";
 
-// 🧹 Clear all paginated user cache
-const clearUserPagesCache = async () => {
+ const clearUserPagesCache = async () => {
   const keys = await redis.keys("users:page:*");
   if (keys.length > 0) await redis.del(...keys);
 };
 
-// 🧠 Cache single user
-const cacheUserById = async (user) => {
+ const cacheUserById = async (user) => {
   if (!user) return;
   const key = `user:${user.id}`;
   await redis.set(key, JSON.stringify(user), "EX", USER_CACHE_TTL);
 };
 
-// 🟢 Register
-const registerUser = async (name, email, password, mobile, role, file, employee_id) => {
+ const registerUser = async (name, email, password, mobile, role, file, employee_id) => {
   if (!name || !email || !password || !mobile)
     return { success: false, message: "All fields are required" };
 
@@ -78,8 +75,7 @@ const registerUser = async (name, email, password, mobile, role, file, employee_
   };
 };
 
-// 🔐 Login
-const loginUser = async (identifier, password) => {
+ const loginUser = async (identifier, password) => {
   const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier);
   const user = await User.findOne({
     where: isEmail ? { email: identifier } : { employee_id: identifier },
@@ -114,8 +110,7 @@ const loginUser = async (identifier, password) => {
   };
 };
 
-// 📥 Get all users with pagination
-const getUsers = async (page = 1, limit = 100) => {
+ const getUsers = async (page = 1, limit = 100) => {
   const key = `users:page:${page}:limit:${limit}`;
   const cached = await redis.get(key);
   if (cached) return JSON.parse(cached);
@@ -132,8 +127,7 @@ const getUsers = async (page = 1, limit = 100) => {
   return users;
 };
 
-// 📘 Get single user
-const getSingleUser = async (id) => {
+ const getSingleUser = async (id) => {
   const key = `user:${id}`;
   const cached = await redis.get(key);
   if (cached) return JSON.parse(cached);
@@ -147,8 +141,7 @@ const getSingleUser = async (id) => {
   return user;
 };
 
-// ✏️ Update
-const updateUser = async (id, updateFields, file) => {
+ const updateUser = async (id, updateFields, file) => {
   const user = await User.findByPk(id);
   if (!user) throw new Error("User not found");
 
@@ -171,8 +164,7 @@ const updateUser = async (id, updateFields, file) => {
   return user;
 };
 
-// 🗑️ Delete
-const deleteUser = async (id) => {
+ const deleteUser = async (id) => {
   const user = await User.findByPk(id);
   if (!user) throw new Error("User not found");
 
@@ -186,8 +178,7 @@ const deleteUser = async (id) => {
   await clearUserPagesCache();
 };
 
-// 🕓 24hr CRON job: refresh count & page 1 cache
-const refreshUserCache = async () => {
+ const refreshUserCache = async () => {
   const count = await User.count();
   const users = await User.findAll({
     limit: 100,
@@ -199,17 +190,14 @@ const refreshUserCache = async () => {
   await redis.set(USER_COUNT_KEY, count, "EX", USER_COUNT_TTL);
   await redis.set(USER_ALL_PAGE_KEY, JSON.stringify(users), "EX", 600);
 
-  console.log("✅ User cache refreshed");
-};
+ };
 
-// 📊 Dashboard summary
-const DashboardData = async () => {
+ const DashboardData = async () => {
   const count = await getUserCountWithCache();
   return { totalUsers: count };
 };
 
-// 🧮 Get count (cached)
-const getUserCountWithCache = async () => {
+ const getUserCountWithCache = async () => {
   const cached = await redis.get(USER_COUNT_KEY);
   if (cached !== null) return parseInt(cached, 10);
 
@@ -218,8 +206,7 @@ const getUserCountWithCache = async () => {
   return count;
 };
 
-// 🔁 Forgot password
-const forgetPassword = async (email) => {
+ const forgetPassword = async (email) => {
   const user = await User.findOne({ where: { email } });
   if (!user) throw new Error("User not found");
 
@@ -236,8 +223,7 @@ const forgetPassword = async (email) => {
   if (!result.success) throw new Error("Failed to send email");
 };
 
-// 🔒 Reset password
-const resetPassword = async (token, newPassword) => {
+ const resetPassword = async (token, newPassword) => {
   const decoded = jwt.verify(token, process.env.JWT_SECRET);
   const user = await User.findOne({ where: { email: decoded.email } });
 

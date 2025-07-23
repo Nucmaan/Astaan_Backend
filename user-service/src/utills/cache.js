@@ -1,6 +1,6 @@
 const redis = require("./redisClient");
 
-const TTL = 24 * 60 * 60; // 24 hours
+const TTL = 24 * 60 * 60;  
 
 async function withCache(key, fetchFn, ttl = TTL) {
   try {
