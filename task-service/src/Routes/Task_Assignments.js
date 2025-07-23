@@ -1,4 +1,4 @@
-const { createTaskAssignment,latestOne, updateAssignedTask, getUserAssignments, editTaskStatusUpdate, getUserTaskStatusUpdates, getAllTaskStatusUpdates, getCompletedTasksStatusUpdates, getUsersWithCompletedTasks, getUserWithTasks, getUserLeaderboardStats, getUserTaskStats, getUserCompletedTasks, getUserActiveAssignments, submitTheTask, getUsersWithCompletedTasksAssignedBySoundEngineer } = require("../Controllers/Task_Assignments.js");
+const { createTaskAssignment, updateAssignedTask, getUserAssignments, editTaskStatusUpdate, getUserTaskStatusUpdates, getAllTaskStatusUpdates, getCompletedTasksStatusUpdates, getUsersWithCompletedTasks, getUserWithTasks, getUserLeaderboardStats, getUserTaskStats, getUserCompletedTasks, getUserActiveAssignments, submitTheTask, getUsersWithCompletedTasksAssignedBySoundEngineer } = require("../Controllers/Task_Assignments.js");
 const Router = require("express").Router();
 const { upload } = require('../middleware/uploadMiddleware.js'); 
 
@@ -19,9 +19,5 @@ Router.get('/userActiveAssignments/:user_id', getUserActiveAssignments);
 Router.put('/submitTask/:task_id',upload.array("file_url",5),submitTheTask);
 Router.get('/usersWithCompletedTasksAssignedBySoundEngineer', getUsersWithCompletedTasksAssignedBySoundEngineer);
 
-
-Router.get('/latestAssignments/:taskId',latestOne);
-
- 
 
 module.exports = Router;

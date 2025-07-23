@@ -35,8 +35,12 @@ const getSingleProject = async (req, res) => {
 
 const deleteProject = async (req, res) => {
     try {
+<<<<<<< HEAD
          const page = parseInt(req.query.page, 10) || parseInt(req.body.page, 10) || 1;
         const isDeleted = await ProjectService.deleteProject(req.params.id, page);
+=======
+        const isDeleted = await ProjectService.deleteProject(req.params.id);
+>>>>>>> parent of 2d23c43 (v0.01)
         if (isDeleted) {
             res.status(200).json({ success: true, message: "Project deleted successfully" });
         } else {

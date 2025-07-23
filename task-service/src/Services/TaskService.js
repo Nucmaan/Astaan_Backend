@@ -5,9 +5,8 @@ const { uploadFileToGCS, deleteFileFromGCS } = require("../utills/gcpSetup.js");
 
 const projectServiceUrl = process.env.PROJECT_SERVICE_URL;
 
- const TASK_COUNT_KEY = "tasks:count";
-const TASK_CACHE_TTL = 60 * 60 * 24;
-const PAGE_SIZE = 50;
+const TASK_COUNT_KEY = "tasks:count";
+const TASK_CACHE_TTL = 60 * 60 * 24; // 24 hours
 
 const checkProjectExists = async (project_id) => {
   if (!project_id || project_id === "undefined" || isNaN(parseInt(project_id))) {
@@ -25,17 +24,19 @@ const checkProjectExists = async (project_id) => {
   }
 };
 
-const clearProjectTaskPageCache = async (project_id, page = null) => {
-  if (page) {
-    const key = `tasks:project:${project_id}:page:${page}:size:${PAGE_SIZE}`;
-    await redis.del(key);
-  } else {
-    const keys = await redis.keys(`tasks:project:${project_id}:page:*:size:*`);
-    if (keys.length > 0) await redis.del(...keys);
-  }
+// 🧹 Clear task cache
+const clearTaskCache = async () => {
+  const keys = await redis.keys("tasks:*");
+  if (keys.length > 0) await redis.del(...keys);
 };
 
+// 🔄 Refresh cron (for dashboard or analytics)
+const refreshTaskCache = async () => {
+  const count = await Task.count();
+  await redis.set(TASK_COUNT_KEY, count, "EX", TASK_CACHE_TTL);
+};
 
+// 🆕 Create
 const createTask = async (data, file) => {
   const { title, description, project_id, status, priority, deadline, estimated_hours } = data;
 
@@ -63,11 +64,15 @@ const createTask = async (data, file) => {
   await redis.del(TASK_COUNT_KEY);
   await redis.del("tasks:all");
   await redis.del(`tasks:project:${project_id}`);
-  await clearProjectTaskPageCache(project_id);
+
+  // Invalidate all paginated caches for this project
+  const keys = await redis.keys(`tasks:project:${project_id}:page:*:size:*`);
+  if (keys.length > 0) await redis.del(...keys);
 
   return { success: true, message: "Task created successfully", task: newTask };
 };
 
+// 🔍 Single Task
 const getSingleTask = async (id) => {
   const key = `task:${id}`;
   const cached = await redis.get(key);
@@ -89,12 +94,14 @@ const getSingleTask = async (id) => {
   return result;
 };
 
+// 📋 All Tasks
 const getAllTasks = async () => {
   const key = "tasks:all";
   const cached = await redis.get(key);
   if (cached) return JSON.parse(cached);
 
   const tasks = await Task.findAll();
+
   const withProject = await Promise.all(
     tasks.map(async (t) => {
       const p = await checkProjectExists(t.project_id);
@@ -110,6 +117,7 @@ const getAllTasks = async () => {
   return result;
 };
 
+// 🧮 Count
 const getTaskCount = async () => {
   const cached = await redis.get(TASK_COUNT_KEY);
   if (cached !== null) return parseInt(cached, 10);
@@ -119,9 +127,14 @@ const getTaskCount = async () => {
   return count;
 };
 
+<<<<<<< HEAD
 const deleteTask = async (id, page) => {
   const PAGE_SIZE = 50; 
 
+=======
+// 🗑️ Delete
+const deleteTask = async (id) => {
+>>>>>>> parent of 2d23c43 (v0.01)
   const task = await Task.findByPk(id);
   if (!task) return { success: false, message: "Task not found" };
 
@@ -135,15 +148,23 @@ const deleteTask = async (id, page) => {
 
   await task.destroy();
 
+<<<<<<< HEAD
    await redis.del(`task:${id}`);
+=======
+  await redis.del(`task:${id}`);
+>>>>>>> parent of 2d23c43 (v0.01)
   await redis.del("tasks:all");
   await redis.del(`tasks:project:${task.project_id}`);
   await redis.del(TASK_COUNT_KEY);
-  await redis.del(`tasks:project:${task.project_id}:page:${page}:size:${PAGE_SIZE}`);
 
-  return { success: true, message: "Task deleted successfully" };
+  // Invalidate all paginated caches for this project
+  const keys = await redis.keys(`tasks:project:${task.project_id}:page:*:size:*`);
+  if (keys.length > 0) await redis.del(...keys);
+
+  return { success: true, message: "Task deleted" };
 };
 
+// ✏️ Update
 const updateTask = async (id, data, file) => {
   const task = await Task.findByPk(id);
   if (!task) return { success: false, message: "Task not found" };
@@ -188,6 +209,7 @@ const updateTask = async (id, data, file) => {
   return { success: true, message: "Task updated", task };
 };
 
+// 📦 Project Tasks
 const getAllProjectTasks = async (project_id, page = 1) => {
   const PAGE_SIZE = 50;
   const offset = (page - 1) * PAGE_SIZE;
@@ -230,4 +252,5 @@ module.exports = {
   deleteTask,
   updateTask,
   getAllProjectTasks,
+  refreshTaskCache,
 };

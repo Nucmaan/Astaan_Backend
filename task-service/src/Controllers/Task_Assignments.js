@@ -173,6 +173,7 @@ const getUsersWithCompletedTasksAssignedBySoundEngineer = async (req, res) => {
     }
 };
 
+<<<<<<< HEAD
 
 
    const latestOne = async (req, res) => {
@@ -185,6 +186,8 @@ const getUsersWithCompletedTasksAssignedBySoundEngineer = async (req, res) => {
     }
   }
 
+=======
+>>>>>>> parent of 2d23c43 (v0.01)
 module.exports = {
     createTaskAssignment,
     updateAssignedTask,
@@ -200,6 +203,5 @@ module.exports = {
     getUserCompletedTasks,
     getUserActiveAssignments,
     submitTheTask,
-    getUsersWithCompletedTasksAssignedBySoundEngineer,
-     latestOne
+    getUsersWithCompletedTasksAssignedBySoundEngineer
 };

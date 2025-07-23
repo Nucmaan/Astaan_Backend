@@ -40,14 +40,13 @@ const SubTask = sequelize.define(
     estimated_hours: {
       type: DataTypes.FLOAT,
       validate: {
-        min: 0.01,
+        min: 0.1,
       },
     },
 
     time_spent: {
       type: DataTypes.FLOAT,
-      allowNull: true,  
-      defaultValue: 0.01, 
+      allowNull: true,   
     },
 
     assignee_name: {
