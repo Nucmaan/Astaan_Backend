@@ -105,6 +105,7 @@ const USER_ALL_PAGE_KEY = "users:page:1:limit:100";
       mobile: user.mobile,
       employee_id : user.employee_id,
       role: user.role,
+      expLevel : user.work_experience_level,
       profile_image: user.profile_image,
     },
   };

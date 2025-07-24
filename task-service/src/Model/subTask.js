@@ -55,6 +55,48 @@ const SubTask = sequelize.define(
       defaultValue: "Not Specified",
     },
 
+    assignee_empId: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      defaultValue: "Not Specified",
+    },
+
+    assignee_expLevel: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      defaultValue: "Not Specified",
+    },
+    assignee_role: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      defaultValue: "Not Specified",
+    },
+
+
+    assignedTo_name: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      defaultValue: "Not Specified",
+    },
+
+    assignedTo_empId: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      defaultValue: "Not Specified",
+    },
+
+    assignedTo_expLevel: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      defaultValue: "Not Specified",
+    },
+    assignedTo_role: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      defaultValue: "Not Specified",
+    },
+
+
     start_time: {
       type: DataTypes.DATE,
     },

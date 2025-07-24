@@ -1,3 +1,4 @@
+const { Op, fn, col } = require('sequelize');
 const SubTask = require("../Model/subTask");
 const redis   = require("../utills/redisClient");
 const { uploadFileToGCS, deleteFileFromGCS } = require("../utills/gcpSetup");
@@ -47,6 +48,7 @@ const SUBTASK_COUNT_KEY = "subtasks:count";
   if (cached) return JSON.parse(cached);
 
   const result = await SubTask.findByPk(id);
+
   if (result) await redis.set(key, JSON.stringify(result), "EX", SUBTASK_CACHE_TTL);
   return result;
 };
@@ -99,6 +101,222 @@ const countAllSubTasks = async () => {
   return count;
 };
 
+
+// services/subtask.service.js
+ 
+
+const ALLOWED_FIELDS = [
+  'task_id',
+  'title',
+  'description',
+  'status',
+  'priority',
+  'deadline',
+  'estimated_hours',
+  'time_spent',
+  'assignee_name',
+  'assignee_empId',
+  'assignee_expLevel',
+  'assignee_role',
+  'assignedTo_name',
+  'assignedTo_empId',
+  'assignedTo_expLevel',
+  'assignedTo_role',
+];
+
+function pickProvided(obj) {
+  const out = {};
+  for (const key of ALLOWED_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(obj, key) && obj[key] !== undefined) {
+      out[key] = obj[key];
+    }
+  }
+  return out;
+}
+
+async function create(payload) {
+  const data = pickProvided(payload);
+  return SubTask.create(data);
+}
+
+async function list(query = {}) {
+  const { task_id, status, priority, page = 1, limit = 20 } = query;
+
+  const where = {};
+  if (task_id) where.task_id = task_id;
+  if (status) where.status = status;
+  if (priority) where.priority = priority;
+
+  return SubTask.findAndCountAll({
+    where,
+    limit: Number(limit),
+    offset: (Number(page) - 1) * Number(limit),
+    order: [['createdAt', 'DESC']],
+  });
+}
+
+async function getById(id) {
+  return SubTask.findByPk(id);
+}
+
+async function update(id, payload) {
+  const subtask = await SubTask.findByPk(id);
+  if (!subtask) return null;
+
+  const data = pickProvided(payload);
+  await subtask.update(data);
+  return subtask;
+}
+
+async function remove(id) {
+  const deleted = await SubTask.destroy({ where: { id } });
+  return !!deleted;
+}
+
+async function getAssignedTasks(empId) {
+  return SubTask.findAll({
+    where: {
+      assignedTo_empId: empId,
+      status: { [Op.ne]: "Completed" }   
+    },
+    order: [['createdAt', 'DESC']]
+  });
+}
+
+
+async function getCompletedTasks(empId) {
+  return SubTask.findAll({
+    where: {
+      assignedTo_empId: empId,
+      status: "Completed"    
+    },
+    order: [['updatedAt', 'DESC']]  
+  });
+}
+
+
+async function usersWithCompletedSubtasks() {
+  return SubTask.findAll({
+    attributes: [
+      'assignedTo_empId',
+      'assignedTo_name',
+      'assignedTo_expLevel',
+      'assignedTo_role',
+      [fn('SUM', col('estimated_hours')), 'total_estimated_hours'],
+      [fn('COUNT', col('id')), 'completed_count']
+    ],
+    where: {
+      status: 'Completed',
+      assignedTo_empId: { [Op.ne]: null }
+    },
+    group: [
+      'assignedTo_empId',
+      'assignedTo_name',
+      'assignedTo_expLevel',
+      'assignedTo_role'
+    ],
+    order: [[fn('SUM', col('estimated_hours')), 'DESC']],
+    raw: true
+  });
+}
+
+async function completedTasksByDefaultRole() {
+  const defaultRole = 'Admin';  
+  return SubTask.findAll({
+    attributes: [
+      'assignee_empId',
+      'assignee_name',
+      'assignee_expLevel',
+      'assignee_role',
+      [fn('SUM', col('estimated_hours')), 'total_estimated_hours'],
+      [fn('COUNT', col('id')), 'completed_count']
+    ],
+    where: {
+      status: 'Completed',
+      assignee_role: defaultRole
+    },
+    group: [
+      'assignee_empId',
+      'assignee_name',
+      'assignee_expLevel',
+      'assignee_role'
+    ],
+    order: [[fn('SUM', col('estimated_hours')), 'DESC']],
+    raw: true
+  });
+}
+
+
+async function getSubtasksByAssignee(empId) {
+  return SubTask.findAll({
+    attributes: [
+      'title',
+      'description',
+      'status',
+      'deadline',
+      'estimated_hours',
+      'time_spent',
+      'assignedTo_name',
+      'createdAt',
+      'updatedAt'
+    ],
+    where: {
+      assignee_empId: empId
+    },
+    order: [['createdAt', 'DESC']],
+    raw: true
+  });
+}
+
+async function getStatusCountByAssignedTo(empId) {
+  const result = await SubTask.findAll({
+    attributes: [
+      'status',
+      [fn('COUNT', col('id')), 'count']
+    ],
+    where: {
+      assignedTo_empId: empId
+    },
+    group: ['status'],
+    raw: true
+  });
+
+   const statusCounts = result.reduce((acc, curr) => {
+    acc[curr.status] = parseInt(curr.count, 10);
+    return acc;
+  }, {});
+
+   const allStatuses = ["To Do", "In Progress", "Review", "Completed"];
+  allStatuses.forEach(status => {
+    if (!(status in statusCounts)) {
+      statusCounts[status] = 0;
+    }
+  });
+
+  return statusCounts;
+}
+
+const finSubTasksByTaksId = async (taskId) => {
+  return SubTask.findAll({
+    where: { task_id: taskId },
+    attributes: [
+      "id",
+      "title",
+      "description",
+      "status",
+      "priority",
+      "deadline",
+      "estimated_hours",
+      "time_spent",
+      "assignee_name",
+      "assignedTo_name"
+    ],
+    order: [["createdAt", "ASC"]],
+    raw: true
+  });
+};
+
+
 module.exports = {
   createSubTask,
   getAllSubTasks,
@@ -108,4 +326,17 @@ module.exports = {
   getSubTasksByTaskId,
   countAllSubTasks,
   refreshSubTaskCache,  
+
+  create, 
+  list, 
+  getById, 
+  update, 
+  remove,
+  getAssignedTasks,
+  getCompletedTasks,
+  usersWithCompletedSubtasks,
+  completedTasksByDefaultRole,
+  getSubtasksByAssignee,
+  getStatusCountByAssignedTo,
+  finSubTasksByTaksId
 };
