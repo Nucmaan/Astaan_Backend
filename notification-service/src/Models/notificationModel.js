@@ -15,7 +15,7 @@ const sequelize = require("../Config/index.js");
     },
     user_name: {
       type: DataTypes.STRING,
-      allowNull: false,
+      allowNull: true,
     },
     message: {
       type: DataTypes.STRING(100),

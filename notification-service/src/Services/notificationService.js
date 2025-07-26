@@ -1,41 +1,13 @@
 const axios = require("axios");
 const Notification = require("../Models/notificationModel");
-const { setCache, getCache, deleteCache } = require('../utills/redisOne.js');
-
-const userServiceUrl = process.env.USER_SERVICE_URL;
-
-const getUserFromService = async (userId) => {
-  const cacheKey = `user:${userId}`;
-  const cachedUser = await getCache(cacheKey);
-  if (cachedUser) return cachedUser;
-
-  try {
-    const response = await axios.get(`${userServiceUrl}/api/auth/users/${userId}`);
-    const user = response.data.user;
-    await setCache(cacheKey, user, 600);
-    return user;
-  } catch (error) {
-    console.error("Error fetching user:", error.message);
-    return null;
-  }
-};
+const { setCache, getCache, deleteCache } = require("../utills/redisOne.js");
 
 const SendNotification = async (userId, message) => {
+  console.log("Sending notification to user:", userId, "Message:", message);
   try {
-    const user = await getUserFromService(userId);
-    if (!user) {
-      return {
-        success: false,
-        message: "User not found",
-      };
-    }
-
-    const message1 = `${user.name} ${message}`;
-
     const notification = await Notification.create({
       user_id: userId,
-      user_name: user.name || "Unknown User",
-      message: message1,
+      message: message,
     });
 
     await deleteCache(`notifications:user:${userId}`);
@@ -46,10 +18,9 @@ const SendNotification = async (userId, message) => {
       data: {
         id: notification.id,
         user_id: userId,
-        user_name: user.name || "Unknown User",
-        message: message1,
-        created_at: notification.created_at
-      }
+        message: message,
+        created_at: notification.created_at,
+      },
     };
   } catch (error) {
     console.error("Error sending notification:", error.message);
@@ -69,7 +40,7 @@ const getAllNotifications = async (page = 1) => {
   if (cached) {
     return {
       success: true,
-      ...cached
+      ...cached,
     };
   }
 
@@ -77,9 +48,9 @@ const getAllNotifications = async (page = 1) => {
     const total = await Notification.count();
 
     const notifications = await Notification.findAll({
-      order: [['created_at', 'DESC']],
+      order: [["created_at", "DESC"]],
       limit: pageSize,
-      offset
+      offset,
     });
 
     const totalPages = Math.ceil(total / pageSize);
@@ -94,7 +65,7 @@ const getAllNotifications = async (page = 1) => {
       pageSize,
       totalPages,
       hasNext,
-      hasPrevious
+      hasPrevious,
     };
 
     await setCache(cacheKey, result, 300);
@@ -104,7 +75,7 @@ const getAllNotifications = async (page = 1) => {
     console.error("Error fetching notifications:", error.message);
     return {
       success: false,
-      message: "Failed to fetch notifications"
+      message: "Failed to fetch notifications",
     };
   }
 };
@@ -115,27 +86,27 @@ const getNotificationsByUserId = async (userId) => {
   if (cached) {
     return {
       success: true,
-      data: cached
+      data: cached,
     };
   }
 
   try {
     const notifications = await Notification.findAll({
       where: { user_id: userId },
-      order: [['created_at', 'DESC']]
+      order: [["created_at", "DESC"]],
     });
 
     await setCache(cacheKey, notifications, 300);
 
     return {
       success: true,
-      data: notifications
+      data: notifications,
     };
   } catch (error) {
     console.error("Error fetching user notifications:", error.message);
     return {
       success: false,
-      message: "Failed to fetch user notifications"
+      message: "Failed to fetch user notifications",
     };
   }
 };
@@ -144,17 +115,17 @@ const deleteAllNotifications = async () => {
   try {
     await Notification.destroy({
       where: {},
-      truncate: true
+      truncate: true,
     });
     return {
       success: true,
-      message: "All notifications deleted successfully"
+      message: "All notifications deleted successfully",
     };
   } catch (error) {
     console.error("Error deleting notifications:", error.message);
     return {
       success: false,
-      message: "Failed to delete notifications"
+      message: "Failed to delete notifications",
     };
   }
 };
@@ -165,7 +136,7 @@ const deleteNotification = async (notificationId) => {
     if (!notification) {
       return {
         success: false,
-        message: "Notification not found"
+        message: "Notification not found",
       };
     }
 
@@ -176,13 +147,13 @@ const deleteNotification = async (notificationId) => {
 
     return {
       success: true,
-      message: "Notification deleted successfully"
+      message: "Notification deleted successfully",
     };
   } catch (error) {
     console.error("Error deleting notification:", error.message);
     return {
       success: false,
-      message: "Failed to delete notification"
+      message: "Failed to delete notification",
     };
   }
 };
@@ -192,5 +163,5 @@ module.exports = {
   getAllNotifications,
   getNotificationsByUserId,
   deleteAllNotifications,
-  deleteNotification
+  deleteNotification,
 };

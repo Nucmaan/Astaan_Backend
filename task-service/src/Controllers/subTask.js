@@ -132,7 +132,7 @@ async function getAssignedTasks(req, res) {
       res.status(500).json({ message: err.message });
   }
 }
-
+ 
 async function getCompletedTasks(req, res) {
   try {
     const empId = req.params.empId;
@@ -145,12 +145,17 @@ async function getCompletedTasks(req, res) {
 
 async function usersWithCompletedSubtasks(req, res) {
   try {
-    const rows = await subTaskService.usersWithCompletedSubtasks();
+    const { month } = req.query;  
+    const rows = await subTaskService.usersWithCompletedSubtasks(month);
+    if (rows.length === 0) {
+      return res.json({ message: `No users with completed tasks in ${month || 'the current month'}` });
+    }
     res.json(rows);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 }
+
 
 async function completedByDefaultRole(req, res) {
   try {

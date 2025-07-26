@@ -12,7 +12,7 @@ const sendNotification  = require("../utills/sendEmail.js");
 
 const userServiceUrl        = process.env.USER_SERVICE_URL;
 const notificationServiceUrl = process.env.NOTIFICATION_SERVICE_URL;
-const subTaskServiceUrl      = process.env.SUBTASK_SERVICE_URL;
+const subTaskServiceUrl      = process.env.SUBTASK_SERVICE_URL;  
 
 const CACHE_EXPIRE = 60 * 60 * 24; // 5 minutes
 
